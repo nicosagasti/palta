@@ -1,6 +1,12 @@
-# Ideas para más adelante
+# Pendientes
 
 Cosas acordadas pero todavía no hechas.
+
+- [ ] **Temas personalizables**: elegir y cambiar el aspecto desde Configuración.
+- [ ] **Convertir documentos**: DOCX, PDF, ODT, TXT y demás formatos de oficina.
+- [ ] Video y audio (MP4, MP3, etc.).
+- [ ] Preferencias de accesibilidad de Windows (transparencia, animaciones, contraste alto).
+- [ ] Detalles menores de la revisión de código.
 
 ## Temas personalizables
 
@@ -16,8 +22,23 @@ Cómo encaja con lo que ya existe:
 - La variable `MANDARINA_THEME=light|dark` que usan las capturas de diseño ya hace algo parecido; un tema guardado la reemplazaría.
 - Respetar las reglas de `.claude/skills/mandarina-glass/SKILL.md`: un solo material, colores con significado, y que funcione con transparencia apagada, animaciones apagadas y contraste alto.
 
+## Convertir documentos
+
+Que la rueda **Convertir** también ofrezca formatos de documento, igual que hoy con las imágenes.
+
+- **Word ↔ PDF**: DOCX, DOC, ODT y RTF → PDF, y PDF → DOCX.
+- **Entre documentos**: DOCX ↔ ODT ↔ RTF ↔ TXT ↔ Markdown ↔ HTML.
+- **Hojas de cálculo y presentaciones**: XLSX/ODS/CSV → PDF, y PPTX/ODP → PDF o imágenes.
+
+Cómo encaja con lo que ya existe:
+
+- Es agregar un backend nuevo en `src/Mandarina.Core/Backends/` y sus operaciones en `src/Mandarina.Core/Operations/`, igual que `ImageBackend` y `PdfBackend`. La rueda, la cola y los avisos no cambian.
+- Hay que agregar los tipos nuevos en `Formats.KindOf` (por ejemplo, `FileKind.Document`).
+- El motor más completo para esto es **LibreOffice** en modo sin ventana (`soffice --headless --convert-to`), que habría que instalar aparte. **Pandoc** sirve para los formatos de texto (Markdown, HTML, DOCX), y PDF → DOCX necesita una librería propia o LibreOffice.
+- Si falta el programa necesario, la opción aparece igual en la rueda y, al elegirla, se explica qué instalar en vez de fallar en silencio.
+
 ## Otras pendientes
 
-- Video y audio (con FFmpeg) y documentos de Office (con LibreOffice o Pandoc).
-- Las preferencias de accesibilidad de Windows (transparencia, animaciones, contraste alto) que pide la skill de diseño.
-- Detalles menores de la revisión de código: avisar "cancelado" si se cierra el selector de carpeta, ocultar los temporales `.mandarina-*`, reinstalar los hooks si Windows los quita.
+- **Video y audio** con FFmpeg: MP4, MOV, MKV, WebM y GIF; extraer el audio a MP3; comprimir.
+- **Accesibilidad**: respetar las preferencias de Windows de transparencia, animaciones y contraste alto, como pide la skill de diseño.
+- **Detalles menores de la revisión de código**: avisar "cancelado" si se cierra el selector de carpeta, ocultar los temporales `.mandarina-*` y reinstalar los hooks si Windows los quita.
