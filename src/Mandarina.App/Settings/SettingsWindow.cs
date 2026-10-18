@@ -17,6 +17,7 @@ internal sealed class SettingsWindow : Window
     private readonly ComboBox _actions = KeyBox();
     private readonly TextBox _hotkey = new() { IsReadOnly = true, IsReadOnlyCaretVisible = false, MinWidth = 180 };
     private readonly CheckBox _startup = new() { Content = "Arrancar con Windows" };
+    private readonly CheckBox _shortcut = new() { Content = "Acceso directo en el escritorio", Margin = new Thickness(0, 8, 0, 0) };
     private readonly TextBlock _error = new() { Foreground = System.Windows.Media.Brushes.IndianRed, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
 
     /// <summary>Devuelve null si todo bien, o un mensaje de error (p. ej. atajo ocupado).</summary>
@@ -38,6 +39,7 @@ internal sealed class SettingsWindow : Window
         _actions.SelectedItem = current.ActionsKey;
         _hotkey.Text = current.Hotkey;
         _startup.IsChecked = current.StartWithWindows;
+        _shortcut.IsChecked = DesktopShortcut.Exists;
         _hotkey.PreviewKeyDown += CaptureHotkey;
         if (hotkeyProblem is not null)
             _error.Text = hotkeyProblem;
@@ -51,6 +53,7 @@ internal sealed class SettingsWindow : Window
         panel.Children.Add(Row("Atajo", _hotkey));
         panel.Children.Add(new Border { Height = 12 });
         panel.Children.Add(_startup);
+        panel.Children.Add(_shortcut);
         panel.Children.Add(_error);
 
         var save = new Button { Content = "Guardar", IsDefault = true, MinWidth = 96, Margin = new Thickness(0, 0, 8, 0) };
@@ -119,6 +122,7 @@ internal sealed class SettingsWindow : Window
             ActionsKey = chosen[2]!,
             Hotkey = _hotkey.Text,
             StartWithWindows = _startup.IsChecked == true,
+            DesktopShortcut = _shortcut.IsChecked == true,
         };
         if (Saving?.Invoke(settings) is { } problem)
         {

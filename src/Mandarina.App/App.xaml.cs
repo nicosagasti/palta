@@ -88,6 +88,8 @@ public partial class App : Application
         {
             _settings.Save(AppSettings.DefaultPath);
             _tray.ShowTip("Mandarina está lista", $"Arrastrá un archivo y tocá {_settings.ConvertKey} para convertirlo.");
+            // Primera vez: mostramos la configuración para elegir arranque con Windows o acceso directo.
+            OpenSettings();
         }
         Log.Info("Mandarina iniciada");
     }
@@ -159,6 +161,15 @@ public partial class App : Application
             catch (Exception e)
             {
                 Log.Error("Arranque con Windows", e);
+            }
+            try
+            {
+                if (updated.DesktopShortcut != DesktopShortcut.Exists)
+                    DesktopShortcut.Set(updated.DesktopShortcut);
+            }
+            catch (Exception e)
+            {
+                Log.Error("Acceso directo", e);
             }
             RegisterHotkey();
             if (_hotkeyProblem is not null && previous.Hotkey != updated.Hotkey)

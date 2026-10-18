@@ -9,6 +9,10 @@ public sealed class Settings
     public string ActionsKey { get; set; } = "Alt";
     public string Hotkey { get; set; } = "Ctrl+Alt+Space";
     public bool StartWithWindows { get; set; }
+
+    /// <summary>Solo para la ventana de configuración: el estado real es si existe el .lnk.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool DesktopShortcut { get; set; }
     public string? LastOperationId { get; set; }
 
     public static string AppDataFolder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Mandarina");
