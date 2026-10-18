@@ -51,7 +51,11 @@ public sealed class ClipboardHistory
         Load();
     }
 
-    public static string DefaultFolder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Mandarina", "portapapeles");
+    /// <summary>MANDARINA_CLIPBOARD_DIR la cambia (para pruebas).</summary>
+    public static string DefaultFolder =>
+        Environment.GetEnvironmentVariable("MANDARINA_CLIPBOARD_DIR") is { Length: > 0 } custom
+            ? custom
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Mandarina", "portapapeles");
 
     /// <summary>Fijados primero; dentro de cada grupo, lo más nuevo arriba.</summary>
     public IReadOnlyList<ClipItem> Items
@@ -101,6 +105,13 @@ public sealed class ClipboardHistory
             return null;
         return Add(Hash("f:" + string.Join('|', files)), h => new ClipItem { Kind = ClipKind.Files, Files = files.ToList(), Hash = h });
     }
+
+    /// <summary>Lo vuelve a poner arriba (se acaba de pegar).</summary>
+    public void Touch(Guid id) => Mutate(items =>
+    {
+        if (items.FirstOrDefault(i => i.Id == id) is { } item)
+            item.CopiedAt = DateTime.Now;
+    });
 
     public void Pin(Guid id, bool pinned) => Mutate(items =>
     {

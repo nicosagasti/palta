@@ -8,7 +8,7 @@ internal sealed class Tray : IDisposable
     private readonly Forms.NotifyIcon _icon;
     private readonly Forms.ToolStripMenuItem _pause;
 
-    public Tray(Action openSettings, Action<bool> setPaused, Action exit)
+    public Tray(Action openSettings, Action openClipboard, Action<bool> setPaused, Action exit)
     {
         _pause = new Forms.ToolStripMenuItem("Pausar");
         _pause.Click += (_, _) =>
@@ -19,6 +19,7 @@ internal sealed class Tray : IDisposable
         };
 
         var menu = new Forms.ContextMenuStrip();
+        menu.Items.Add("Portapapeles…", null, (_, _) => openClipboard());
         menu.Items.Add("Configuración…", null, (_, _) => openSettings());
         menu.Items.Add(_pause);
         menu.Items.Add(new Forms.ToolStripSeparator());

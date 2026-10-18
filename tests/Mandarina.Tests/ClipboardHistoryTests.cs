@@ -135,6 +135,18 @@ public class ClipboardHistoryTests
     }
 
     [Fact]
+    public void Touch_MovesToTop()
+    {
+        using var d = new TempDir();
+        var h = new ClipboardHistory(d.Path);
+        var first = h.AddText("primero")!;
+        Thread.Sleep(5);
+        h.AddText("segundo");
+        h.Touch(first.Id);
+        Assert.Equal("primero", h.Items[0].Text);
+    }
+
+    [Fact]
     public void Changed_Raised()
     {
         using var d = new TempDir();

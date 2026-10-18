@@ -33,6 +33,15 @@ public class SettingsTests
     }
 
     [Fact]
+    public void Settings_NullStrings_BecomeDefaults()
+    {
+        using var d = new TempDir();
+        var p = d.File("settings.json", "{ \"Hotkey\": null, \"ConvertKey\": null, \"ClipboardHotkey\": null }");
+        var s = Settings.Load(p);
+        Assert.Equal(("Ctrl+Alt+Space", "Shift", "Ctrl+Alt+V"), (s.Hotkey, s.ConvertKey, s.ClipboardHotkey));
+    }
+
+    [Fact]
     public async Task SafeWrite_Exception_DeletesTemp()
     {
         using var d = new TempDir();

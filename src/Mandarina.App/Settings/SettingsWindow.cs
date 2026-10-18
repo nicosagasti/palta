@@ -16,6 +16,8 @@ internal sealed class SettingsWindow : Window
     private readonly ComboBox _tools = KeyBox();
     private readonly ComboBox _actions = KeyBox();
     private readonly TextBox _hotkey = new() { IsReadOnly = true, IsReadOnlyCaretVisible = false, MinWidth = 180 };
+    private readonly TextBox _clipHotkey = new() { IsReadOnly = true, IsReadOnlyCaretVisible = false, MinWidth = 180 };
+    private readonly CheckBox _clipEnabled = new() { Content = "Guardar historial del portapapeles" };
     private readonly CheckBox _startup = new() { Content = "Arrancar con Windows" };
     private readonly CheckBox _shortcut = new() { Content = "Acceso directo en el escritorio", Margin = new Thickness(0, 8, 0, 0) };
     private readonly TextBlock _error = new() { Foreground = System.Windows.Media.Brushes.IndianRed, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
@@ -41,6 +43,9 @@ internal sealed class SettingsWindow : Window
         _startup.IsChecked = current.StartWithWindows;
         _shortcut.IsChecked = DesktopShortcut.Exists;
         _hotkey.PreviewKeyDown += CaptureHotkey;
+        _clipHotkey.Text = current.ClipboardHotkey;
+        _clipHotkey.PreviewKeyDown += CaptureHotkey;
+        _clipEnabled.IsChecked = current.ClipboardEnabled;
         if (hotkeyProblem is not null)
             _error.Text = hotkeyProblem;
 
@@ -51,6 +56,9 @@ internal sealed class SettingsWindow : Window
         panel.Children.Add(Row("Acciones", _actions));
         panel.Children.Add(new TextBlock { Text = "Sin arrastrar: seleccioná archivos en el Explorador (o copialos) y apretá el atajo.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 16, 0, 8), Opacity = 0.8 });
         panel.Children.Add(Row("Atajo", _hotkey));
+        panel.Children.Add(new TextBlock { Text = "Historial de lo que copiaste: textos, imágenes y archivos.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 16, 0, 8), Opacity = 0.8 });
+        panel.Children.Add(Row("Portapapeles", _clipHotkey));
+        panel.Children.Add(_clipEnabled);
         panel.Children.Add(new Border { Height = 12 });
         panel.Children.Add(_startup);
         panel.Children.Add(_shortcut);
@@ -98,7 +106,7 @@ internal sealed class SettingsWindow : Window
             return;
         }
         parts.Add(key.ToString());
-        _hotkey.Text = string.Join("+", parts);
+        ((TextBox)sender).Text = string.Join("+", parts);
         _error.Text = "";
     }
 
@@ -108,6 +116,11 @@ internal sealed class SettingsWindow : Window
         if (chosen.Distinct().Count() != 3)
         {
             _error.Text = "Cada rueda necesita una tecla distinta.";
+            return;
+        }
+        if (!HotkeyManager.TryParse(_clipHotkey.Text, out _, out _) || _clipHotkey.Text == _hotkey.Text)
+        {
+            _error.Text = "El atajo del portapapeles no es válido o es igual al de la rueda.";
             return;
         }
         if (!HotkeyManager.TryParse(_hotkey.Text, out _, out _))
@@ -123,6 +136,8 @@ internal sealed class SettingsWindow : Window
             Hotkey = _hotkey.Text,
             StartWithWindows = _startup.IsChecked == true,
             DesktopShortcut = _shortcut.IsChecked == true,
+            ClipboardHotkey = _clipHotkey.Text,
+            ClipboardEnabled = _clipEnabled.IsChecked == true,
         };
         if (Saving?.Invoke(settings) is { } problem)
         {

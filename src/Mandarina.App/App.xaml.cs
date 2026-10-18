@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Threading;
+using Mandarina.App.Clips;
 using Mandarina.App.Input;
 using Mandarina.App.Jobs;
 using Mandarina.App.Native;
@@ -7,6 +8,7 @@ using Mandarina.App.Settings;
 using Mandarina.App.Shell;
 using Mandarina.App.Wheel;
 using Mandarina.Core;
+using Mandarina.Core.Clipboard;
 using Mandarina.Core.Input;
 using AppSettings = Mandarina.Core.Settings;
 
@@ -26,6 +28,9 @@ public partial class App : Application
     private Tray? _tray;
     private SettingsWindow? _settingsWindow;
     private string? _hotkeyProblem;
+    private ClipboardHistory? _clipHistory;
+    private ClipboardWatcher? _clipWatcher;
+    private ClipboardWindow? _clipWindow;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -83,7 +88,12 @@ public partial class App : Application
         _hotkeys = new HotkeyManager();
         RegisterHotkey();
 
-        _tray = new Tray(OpenSettings, paused => { lock (_session) _session.Paused = paused; }, () => Shutdown());
+        _clipHistory = new ClipboardHistory(ClipboardHistory.DefaultFolder);
+        _clipWatcher = new ClipboardWatcher(_clipHistory, Dispatcher) { Enabled = _settings.ClipboardEnabled };
+        _clipWindow = new ClipboardWindow(_clipHistory, _clipWatcher);
+        RegisterClipboardHotkey();
+
+        _tray = new Tray(OpenSettings, OpenClipboard, paused => { lock (_session) _session.Paused = paused; }, () => Shutdown());
         if (firstRun)
         {
             _settings.Save(AppSettings.DefaultPath);
@@ -117,11 +127,27 @@ public partial class App : Application
 
     private void RegisterHotkey()
     {
-        _hotkeyProblem = _hotkeys!.Register(_settings.Hotkey, OnHotkey)
+        _hotkeyProblem = _hotkeys!.Register(HotkeyManager.WheelId, _settings.Hotkey, OnHotkey)
             ? null
             : $"No se pudo registrar {_settings.Hotkey}: otra aplicación ya lo usa.";
         if (_hotkeyProblem is not null)
             Log.Info(_hotkeyProblem);
+    }
+
+    private void RegisterClipboardHotkey()
+    {
+        if (!_hotkeys!.Register(HotkeyManager.ClipboardId, _settings.ClipboardHotkey, OpenClipboard))
+        {
+            var problem = $"No se pudo registrar {_settings.ClipboardHotkey} para el portapapeles: otra aplicación ya lo usa.";
+            _hotkeyProblem = _hotkeyProblem is null ? problem : $"{_hotkeyProblem}\n{problem}";
+            Log.Info(problem);
+        }
+    }
+
+    private void OpenClipboard()
+    {
+        Win32.GetCursorPos(out var cursor);
+        _clipWindow?.ShowNear(cursor.X, cursor.Y);
     }
 
     private void OnHotkey()
@@ -171,6 +197,8 @@ public partial class App : Application
             {
                 Log.Error("Acceso directo", e);
             }
+            if (_clipWatcher is not null)
+                _clipWatcher.Enabled = updated.ClipboardEnabled;
             RegisterHotkey();
             if (_hotkeyProblem is not null && previous.Hotkey != updated.Hotkey)
             {
@@ -181,6 +209,7 @@ public partial class App : Application
                 return problem;
             }
             SaveSettings();
+            RegisterClipboardHotkey();
             return null;
         };
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
@@ -203,6 +232,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _hooks?.Dispose();
+        _clipWatcher?.Dispose();
         _hotkeys?.Dispose();
         _tray?.Dispose();
         _singleInstance?.Dispose();

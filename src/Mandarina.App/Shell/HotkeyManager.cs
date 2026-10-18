@@ -4,15 +4,15 @@ using Mandarina.App.Native;
 
 namespace Mandarina.App.Shell;
 
-/// <summary>Un atajo global (RegisterHotKey) sobre una ventana de mensajes oculta.</summary>
+/// <summary>Atajos globales (RegisterHotKey) sobre una ventana de mensajes oculta; cada uno con su id.</summary>
 internal sealed class HotkeyManager : IDisposable
 {
-    private const int Id = 1;
+    public const int WheelId = 1;
+    public const int ClipboardId = 2;
     private const uint MOD_ALT = 1, MOD_CONTROL = 2, MOD_SHIFT = 4, MOD_WIN = 8, MOD_NOREPEAT = 0x4000;
 
     private readonly HwndSource _source;
-    private Action? _action;
-    private bool _registered;
+    private readonly Dictionary<int, Action> _actions = [];
 
     public HotkeyManager()
     {
@@ -21,20 +21,23 @@ internal sealed class HotkeyManager : IDisposable
     }
 
     /// <summary>Registra "Ctrl+Alt+Space" y similares; false si el formato es inválido o el atajo ya lo usa otra app.</summary>
-    public bool Register(string combo, Action action)
+    public bool Register(int id, string? combo, Action action)
     {
-        Unregister();
+        Unregister(id);
         if (!TryParse(combo, out var mods, out var vk))
             return false;
-        _action = action;
-        _registered = Win32.RegisterHotKey(_source.Handle, Id, mods | MOD_NOREPEAT, vk);
-        return _registered;
+        if (!Win32.RegisterHotKey(_source.Handle, id, mods | MOD_NOREPEAT, vk))
+            return false;
+        _actions[id] = action;
+        return true;
     }
 
-    public static bool TryParse(string combo, out uint mods, out uint vk)
+    public static bool TryParse(string? combo, out uint mods, out uint vk)
     {
         mods = 0;
         vk = 0;
+        if (string.IsNullOrWhiteSpace(combo))
+            return false;
         foreach (var raw in combo.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             switch (raw.ToLowerInvariant())
@@ -53,26 +56,26 @@ internal sealed class HotkeyManager : IDisposable
         return vk != 0 && mods != 0;
     }
 
-    private void Unregister()
+    public void Unregister(int id)
     {
-        if (_registered)
-            Win32.UnregisterHotKey(_source.Handle, Id);
-        _registered = false;
+        if (_actions.Remove(id))
+            Win32.UnregisterHotKey(_source.Handle, id);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == Win32.WM_HOTKEY && wParam.ToInt32() == Id)
+        if (msg == Win32.WM_HOTKEY && _actions.TryGetValue(wParam.ToInt32(), out var action))
         {
             handled = true;
-            _action?.Invoke();
+            action();
         }
         return IntPtr.Zero;
     }
 
     public void Dispose()
     {
-        Unregister();
+        foreach (var id in _actions.Keys.ToList())
+            Unregister(id);
         _source.Dispose();
     }
 }

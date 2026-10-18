@@ -15,6 +15,7 @@ internal static partial class Win32
     public const int WM_SYSKEYDOWN = 0x0104;
     public const int WM_SYSKEYUP = 0x0105;
     public const int WM_HOTKEY = 0x0312;
+    public const int WM_CLIPBOARDUPDATE = 0x031D;
 
     public const int GWL_EXSTYLE = -20;
     public const int WS_EX_TOPMOST = 0x00000008;
@@ -159,6 +160,32 @@ internal static partial class Win32
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS margins);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool AddClipboardFormatListener(IntPtr hwnd);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool RemoveClipboardFormatListener(IntPtr hwnd);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetForegroundWindow(IntPtr hwnd);
+
+    [LibraryImport("user32.dll")]
+    public static partial void keybd_event(byte bVk, byte bScan, uint dwFlags, IntPtr dwExtraInfo);
+
+    /// <summary>Simula Ctrl+V en la ventana con foco.</summary>
+    public static void SendPaste()
+    {
+        const byte VK_CONTROL = 0x11, VK_V = 0x56;
+        const uint KEYUP = 2;
+        keybd_event(VK_CONTROL, 0, 0, IntPtr.Zero);
+        keybd_event(VK_V, 0, 0, IntPtr.Zero);
+        keybd_event(VK_V, 0, KEYUP, IntPtr.Zero);
+        keybd_event(VK_CONTROL, 0, KEYUP, IntPtr.Zero);
+    }
 
     [LibraryImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
