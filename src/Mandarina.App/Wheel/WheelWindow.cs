@@ -176,6 +176,8 @@ internal sealed class WheelWindow : Window
 
     private void Open(WheelKind wheel, int x, int y)
     {
+        if (!_keyboardMode && _hwnd != IntPtr.Zero)
+            Win32.AddExStyle(_hwnd, Win32.WS_EX_NOACTIVATE);
         _closing = false;
         _closeTimer.Stop();
         _emptyTimer.Stop();
@@ -583,6 +585,10 @@ internal sealed class WheelWindow : Window
     {
         if (_centerTitle is null || _centerGlyph is null || _centerFill is null)
             return;
+        if (_files.Count > 0 && _ops.Count == 0)
+            _message = "Nada para hacer con esto";
+        else if (_files.Count > 0 && _message == "Nada para hacer con esto")
+            _message = null;
         var onCenter = _hover == -1;
         _centerTitle.Text = _message ?? (_wheel switch
         {

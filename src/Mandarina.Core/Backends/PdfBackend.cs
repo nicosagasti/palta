@@ -81,7 +81,7 @@ public static class PdfBackend
         // Windows escala tanto page.Size como DestinationWidth por el DPI de la pantalla (p. ej. ×1,25).
         // Pedimos el ancho calculado desde los puntos de PDFsharp y, si sale escalado, lo corregimos
         // dividiendo por el factor que medimos en la primera página.
-        var widthsPt = PageWidthsInPoints(pdf);
+        var widthsPt = PageWidthsInPoints(pdf, doc);
         var displayScale = 1.0;
         var outputs = new List<string>();
         for (uint i = 0; i < doc.PageCount; i++)
@@ -116,12 +116,29 @@ public static class PdfBackend
     }
 
     /// <summary>Ancho visible de cada página en puntos, con la rotación aplicada.</summary>
-    private static double[] PageWidthsInPoints(string pdf)
+    /// <remarks>
+    /// Si PDFsharp no puede abrirlo (algún cifrado que no soporta) se usa el ancho que da Windows,
+    /// que está en DIP (1/96") y Windows sí lo renderiza.
+    /// </remarks>
+    private static double[] PageWidthsInPoints(string pdf, WinPdf.PdfDocument rendered)
     {
-        using var doc = Open(pdf);
-        return doc.Pages.Cast<PdfPage>()
-            .Select(p => p.Rotate % 180 == 0 ? p.Width.Point : p.Height.Point)
-            .ToArray();
+        try
+        {
+            using var doc = Open(pdf);
+            return doc.Pages.Cast<PdfPage>()
+                .Select(p => p.Rotate % 180 == 0 ? p.Width.Point : p.Height.Point)
+                .ToArray();
+        }
+        catch (ConversionException)
+        {
+            var widths = new double[rendered.PageCount];
+            for (uint i = 0; i < rendered.PageCount; i++)
+            {
+                using var page = rendered.GetPage(i);
+                widths[i] = page.Size.Width * 72 / 96;
+            }
+            return widths;
+        }
     }
 
     private static async Task<WinPdf.PdfDocument> LoadForRender(string pdf)

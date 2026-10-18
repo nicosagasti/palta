@@ -40,6 +40,8 @@ public static class ActionOperations
                     : OutputPaths.For(Path.Combine(target, name), Path.GetExtension(name));
                 if (isDir)
                 {
+                    if (IsInside(target, src))
+                        throw new Backends.ConversionException($"No se puede {(move ? "mover" : "copiar")} «{name}» dentro de sí misma.");
                     if (move && SameVolume(src, target))
                         Directory.Move(src, dst);
                     else
@@ -63,15 +65,27 @@ public static class ActionOperations
     private static bool SameVolume(string a, string b) =>
         string.Equals(Path.GetPathRoot(Path.GetFullPath(a)), Path.GetPathRoot(Path.GetFullPath(b)), StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>¿<paramref name="path"/> es <paramref name="folder"/> o está adentro?</summary>
+    private static bool IsInside(string path, string folder)
+    {
+        var p = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        var f = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+        return p.Equals(f, StringComparison.OrdinalIgnoreCase) || p.StartsWith(f + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void CopyDirectory(string src, string dst, CancellationToken ct)
     {
+        // Se lista todo antes de crear nada, y no se siguen accesos directos de carpeta
+        // (junctions/symlinks): un bucle de enlaces copiaría sin fin.
+        var files = Directory.GetFiles(src);
+        var dirs = Directory.GetDirectories(src).Where(d => !File.GetAttributes(d).HasFlag(FileAttributes.ReparsePoint)).ToArray();
         Directory.CreateDirectory(dst);
-        foreach (var file in Directory.EnumerateFiles(src))
+        foreach (var file in files)
         {
             ct.ThrowIfCancellationRequested();
             File.Copy(file, Path.Combine(dst, Path.GetFileName(file)));
         }
-        foreach (var dir in Directory.EnumerateDirectories(src))
+        foreach (var dir in dirs)
             CopyDirectory(dir, Path.Combine(dst, Path.GetFileName(dir)), ct);
     }
 }

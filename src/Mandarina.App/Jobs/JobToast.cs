@@ -31,6 +31,8 @@ internal sealed class JobToast : Window
 
     public event Action<JobToast>? Gone;
 
+    public bool Finished => _job.State is JobState.Done or JobState.Failed or JobState.Canceled;
+
     public JobToast(Job job)
     {
         _job = job;
@@ -205,7 +207,7 @@ internal sealed class ToastStack
         toast.ShowAt(area.Right - JobToast.CardWidth - Margin, area.Bottom - JobToast.CardHeight - Margin);
         Relayout();
         // Más de 5 visibles es ruido: las más viejas terminadas se van.
-        foreach (var old in _toasts.Skip(5).ToList())
+        foreach (var old in _toasts.Skip(5).Where(t => t.Finished).ToList())
             old.FadeOut();
     }
 

@@ -22,9 +22,10 @@ internal static class GlassCapture
         var old = Win32.SelectObject(mem, bitmap);
         try
         {
-            if (!Win32.BitBlt(mem, 0, 0, width, height, screen, x, y, Win32.SRCCOPY))
+            if (bitmap == IntPtr.Zero || !Win32.BitBlt(mem, 0, 0, width, height, screen, x, y, Win32.SRCCOPY))
                 return null;
             Win32.SelectObject(mem, old);
+            old = IntPtr.Zero;
             var full = Imaging.CreateBitmapSourceFromHBitmap(bitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
             var small = new TransformedBitmap(full, new ScaleTransform(Downscale, Downscale));
             small.Freeze();
@@ -37,6 +38,9 @@ internal static class GlassCapture
         }
         finally
         {
+            // Un bitmap seleccionado en un DC no se puede borrar: primero se lo saca.
+            if (old != IntPtr.Zero)
+                Win32.SelectObject(mem, old);
             Win32.DeleteObject(bitmap);
             Win32.DeleteDC(mem);
             Win32.ReleaseDC(IntPtr.Zero, screen);

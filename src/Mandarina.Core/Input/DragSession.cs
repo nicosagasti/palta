@@ -15,6 +15,7 @@ public sealed class DragSession(int dragDx, int dragDy, Func<Mod, WheelKind?> wh
     private State _state;
     private int _startX, _startY, _x, _y;
     private Mod? _pending;
+    private readonly HashSet<Mod> _held = [];
     private WheelKind? _openWheel;
 
     /// <summary>(rueda, x, y) en coordenadas de pantalla.</summary>
@@ -63,13 +64,17 @@ public sealed class DragSession(int dragDx, int dragDy, Func<Mod, WheelKind?> wh
             _pending = null;
             return;
         }
-        // Las repeticiones automáticas de la tecla mantenida llegan como más KeyDown: se ignoran.
+        // Las repeticiones automáticas de una tecla mantenida llegan como más KeyDown: solo cuenta
+        // el paso de suelta a apretada, y solo si pasa durante el arrastre (Shift+arrastrar no es un toque).
+        if (!_held.Add(m))
+            return;
         if (_pending is null && Dragging && !Paused)
             _pending = m;
     }
 
     public void KeyUp(Mod m)
     {
+        _held.Remove(m);
         if (_pending != m)
             return;
         _pending = null;

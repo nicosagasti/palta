@@ -63,7 +63,7 @@ public static class PdfOperations
         }
         catch
         {
-            try { Directory.Delete(tmp, true); } catch (IOException) { }
+            try { Directory.Delete(tmp, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             throw;
         }
     }

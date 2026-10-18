@@ -87,6 +87,21 @@ public class CatalogTests
     }
 
     [Fact]
+    public async Task CopyTo_IntoItsOwnSubfolder_Refused()
+    {
+        using var src = new TempDir();
+        var folder = Path.Combine(src.Path, "carpeta");
+        var sub = Path.Combine(folder, "sub");
+        Directory.CreateDirectory(sub);
+        File.WriteAllText(Path.Combine(folder, "x.txt"), "x");
+        var op = Catalog.CreateDefault(new FakeHost { Folder = sub }).ById("copy-to")!;
+        var e = await Assert.ThrowsAsync<Mandarina.Core.Backends.ConversionException>(() => op.RunAsync([folder], new Progress<double>(), default));
+        Assert.Contains("dentro de sí misma", e.Message);
+        Assert.Equal(["sub"], Directory.GetDirectories(folder).Select(Path.GetFileName));
+        Assert.Empty(Directory.GetFileSystemEntries(sub));
+    }
+
+    [Fact]
     public async Task CopyTo_PickerCanceled_DoesNothing()
     {
         using var src = new TempDir();

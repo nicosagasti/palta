@@ -206,6 +206,27 @@ public class BackendTests
     }
 
     [Fact]
+    public async Task PdfToPng_OwnerPasswordPdf_Renders()
+    {
+        // Facturas y resúmenes bancarios: contraseña de propietario, sin contraseña para abrir.
+        using var d = new TempDir();
+        var path = Path.Combine(d.Path, "protegido.pdf");
+        using (var doc = new PdfSharp.Pdf.PdfDocument())
+        {
+            doc.AddPage();
+            doc.AddPage();
+            doc.SecuritySettings.OwnerPassword = "duenio";
+            doc.SecuritySettings.PermitModifyDocument = false;
+            doc.SecuritySettings.PermitExtractContent = false;
+            doc.Save(path);
+        }
+        var outputs = await Run("pdf-to-png", path);
+        Assert.Equal(2, outputs.Count);
+        using var img = new MagickImage(outputs[0]);
+        Assert.InRange(img.Width, 1600u, 1750u);
+    }
+
+    [Fact]
     public async Task PdfToJpg_SinglePage_NextToOriginal()
     {
         using var d = new TempDir();

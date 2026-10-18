@@ -91,6 +91,19 @@ public class DragSessionTests
     }
 
     [Fact]
+    public void HeldBeforeDrag_WithAutoRepeat_NotATap()
+    {
+        // Shift+arrastrar (mover en el Explorador): Windows repite KeyDown mientras se mantiene.
+        var s = New();
+        s.KeyDown(Mod.Shift);
+        Drag(s);
+        s.KeyDown(Mod.Shift);
+        s.KeyDown(Mod.Shift);
+        s.KeyUp(Mod.Shift);
+        Assert.Empty(_requests);
+    }
+
+    [Fact]
     public void AutoRepeatKeyDown_StillATap()
     {
         var s = New();
