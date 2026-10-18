@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Diagnostics;
 using System.Windows.Threading;
 using Mandarina.App.Native;
@@ -8,8 +8,8 @@ using Mandarina.Core;
 namespace Mandarina.App;
 
 /// <summary>
-/// <c>Mandarina.exe --bench</c>: mide cuánto tarda la rueda en aparecer (hasta quedar dibujada)
-/// y cuánta memoria usa la app en reposo. Escribe el resultado en la consola que la lanzó.
+/// <c>Mandarina.exe --bench</c>: mide cuÃ¡nto tarda la rueda en aparecer (hasta quedar dibujada)
+/// y cuÃ¡nta memoria usa la app en reposo. Escribe el resultado en la consola que la lanzÃ³.
 /// </summary>
 internal static class Bench
 {
@@ -44,14 +44,14 @@ internal static class Bench
         }
         catch (Exception e)
         {
-            Console.WriteLine($"Bench falló: {e}");
+            Console.WriteLine($"Bench fallÃ³: {e}");
         }
         exit();
     }
 
     /// <summary>
     /// <c>Mandarina.exe --snapshot carpeta</c>: abre cada rueda en el centro de la pantalla con archivos
-    /// de ejemplo y guarda cómo se ve (con la captura del fondo real) en PNG, para revisar el diseño.
+    /// de ejemplo y guarda cÃ³mo se ve (con la captura del fondo real) en PNG, para revisar el diseÃ±o.
     /// </summary>
     public static async void Snapshot(WheelWindow wheel, Dispatcher dispatcher, string folder, Action exit)
     {
@@ -87,7 +87,7 @@ internal static class Bench
         }
         catch (Exception e)
         {
-            Console.WriteLine($"Snapshot falló: {e}");
+            Console.WriteLine($"Snapshot fallÃ³: {e}");
         }
         exit();
     }
@@ -100,7 +100,7 @@ internal static class Bench
         using (var s = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/mandarina.png"))!.Stream)
         using (var f = File.Create(icon))
             s.CopyTo(f);
-        history.AddText("Receta de torta de mandarina: 3 huevos, 200 g de azúcar y la ralladura de dos mandarinas");
+        history.AddText("Receta de torta de mandarina: 3 huevos, 200 g de azÃºcar y la ralladura de dos mandarinas");
         history.AddFiles([@"C:\Users\nicol\Documents\Presupuesto 2026.xlsx"]);
         history.AddImage(File.ReadAllBytes(icon));
         history.AddText("https://github.com/nicosagasti/tangerine");
@@ -126,25 +126,43 @@ internal static class Bench
         var queue = new JobQueue(2);
         var stack = new Jobs.ToastStack();
         var gate = new TaskCompletionSource();
-        var running = new Operation("snap-run", WheelKind.Convert, "Convertir a JPG", "", _ => true, async (_, progress, _) =>
+        var running = new Operation("snap-run", WheelKind.Convert, "JPG", "", _ => true, async (_, progress, _) =>
         {
             progress.Report(0.62);
             await gate.Task;
             return [];
         });
-        var done = new Operation("snap-done", WheelKind.Tools, "Comprimir", "", _ => true, (_, _, _) =>
-            Task.FromResult<IReadOnlyList<string>>([@"C:\fotos\vacaciones (comprimida).jpg"]));
+        // Un resultado de imagen real, para que se vea la miniatura.
+        var result = Path.Combine(Path.GetTempPath(), "mandarina-snapshot-resultado.png");
+        using (var s = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/mandarina.png"))!.Stream)
+        using (var f = File.Create(result))
+            s.CopyTo(f);
+        var done = new Operation("snap-done", WheelKind.Convert, "PNG", "", _ => true, (_, _, _) =>
+            Task.FromResult<IReadOnlyList<string>>([result]));
+        var done2 = new Operation("snap-done2", WheelKind.Tools, "Comprimir", "", _ => true, (_, _, _) =>
+            Task.FromResult<IReadOnlyList<string>>([@"C:\docs\informe (comprimido).pdf"]));
+        var failed = new Operation("snap-fail", WheelKind.Convert, "WebP", "", _ => true, (_, _, _) =>
+            throw new Core.Backends.ConversionException("La imagen estÃ¡ daÃ±ada o no es lo que dice ser."));
         var toasts = new List<Jobs.JobToast>();
         queue.JobAdded += job => toasts.Add(stack.Add(job));
-        queue.Enqueue(done, [@"C:\fotos\vacaciones.jpg"]);
-        await Task.Delay(300);
+        queue.Enqueue(failed, [@"C:\fotos\captura.heic"]);
+        await Task.Delay(250);
+        queue.Enqueue(done2, [@"C:\docs\informe.pdf"]);
+        await Task.Delay(250);
+        queue.Enqueue(done, [@"C:\fotos\vacaciones.heic"]);
+        await Task.Delay(250);
         queue.Enqueue(running, [@"C:\fotos\atardecer.png", @"C:\fotos\playa.png"]);
-        await Task.Delay(700);
+        await Task.Delay(800);
+        toasts[1].RevealButtons();
         for (var i = 0; i < toasts.Count; i++)
         {
             var t = toasts[i];
             var scale = Win32.ScaleAt((int)t.Left, (int)t.Top);
+            // Lo de atrÃ¡s sin la cÃ¡psula misma.
+            t.Opacity = 0;
+            await Task.Delay(80);
             var under = Wheel.GlassCapture.Capture((int)(t.Left * scale), (int)(t.Top * scale), (int)(t.Width * scale), (int)(t.Height * scale), 1);
+            t.Opacity = 1;
             var path = Path.Combine(folder, $"aviso-{i + 1}.png");
             t.SaveSnapshot(path, under);
             Console.WriteLine(path);
@@ -152,5 +170,6 @@ internal static class Bench
         gate.SetResult();
         foreach (var t in toasts)
             t.Close();
+        File.Delete(result);
     }
 }

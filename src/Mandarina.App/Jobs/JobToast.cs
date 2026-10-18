@@ -7,39 +7,44 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using Mandarina.App.Native;
 using Mandarina.App.Theme;
 using Mandarina.App.Wheel;
 using Mandarina.Core;
+using Path = System.Windows.Shapes.Path;
 
 namespace Mandarina.App.Jobs;
 
 /// <summary>
-/// Aviso de un trabajo al estilo de las notificaciones de macOS: tarjeta de vidrio con el ícono
-/// de la app, título, archivo, una barra finísima y acciones de texto.
+/// Aviso de un trabajo: una cápsula del mismo vidrio que la rueda. A la izquierda, un anillo de
+/// progreso que al terminar se vuelve la miniatura del resultado (o ✓ / ✕); los botones aparecen
+/// solo al pasar el mouse. Un clic en la cápsula abre el resultado.
 /// </summary>
 internal sealed class JobToast : Window
 {
-    public const double CardWidth = 356;
-    public const double CardHeight = 76;
+    public const double CardWidth = 340;
+    public const double CardHeight = 60;
     public const double ShadowMargin = 18;
-    private const double Radius = 16;
-
-    private static readonly BitmapImage AppIcon = LoadIcon();
+    private const double Radius = CardHeight / 2;
+    private const double RingSize = 36;
+    private const double RingStroke = 2.5;
 
     private readonly Job _job;
     private readonly Palette _palette = Palette.Current();
     private bool Dark => _palette.Dark;
     private readonly TextBlock _title;
     private readonly TextBlock _status;
-    private readonly Border _barTrack;
-    private readonly Border _barFill;
     private readonly Image _glass = new() { Stretch = Stretch.Fill, Effect = new BlurEffect { Radius = 16, RenderingBias = RenderingBias.Performance } };
-    private readonly StackPanel _buttons = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
-    private readonly TextBlock _badge;
+    private readonly StackPanel _buttons = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Opacity = 0 };
+    private readonly Grid _indicator = new() { Width = RingSize, Height = RingSize, VerticalAlignment = VerticalAlignment.Center };
+    private readonly Path _ring = new() { StrokeThickness = RingStroke, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
+    private readonly RotateTransform _spin = new(0, RingSize / 2, RingSize / 2);
     private readonly DispatcherTimer _autoClose;
     private readonly TranslateTransform _slide = new();
+    private double _shownProgress;
+    private bool _spinning;
     private bool _closing;
 
     public event Action<JobToast>? Gone;
@@ -63,76 +68,53 @@ internal sealed class JobToast : Window
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
 
         var dark = Dark;
-        var text = new SolidColorBrush(Glass.Text(dark));
-        var secondary = new SolidColorBrush(Glass.Secondary(dark));
-
-        var card = new Grid { Margin = new Thickness(ShadowMargin), RenderTransform = _slide };
-        card.Children.Add(_glass);
+        var card = new Grid { Margin = new Thickness(ShadowMargin), RenderTransform = _slide, Cursor = Cursors.Hand };
         _glass.Clip = new RectangleGeometry(new Rect(0, 0, CardWidth, CardHeight), Radius, Radius);
+        card.Children.Add(_glass);
         card.Children.Add(new Border { CornerRadius = new CornerRadius(Radius), Background = new SolidColorBrush(Glass.Tint(dark)) });
-        card.Children.Add(new Border { CornerRadius = new CornerRadius(Radius), Background = Glass.Specular(dark), Height = 40, VerticalAlignment = VerticalAlignment.Top });
+        card.Children.Add(new Border { CornerRadius = new CornerRadius(Radius), Background = Glass.Specular(dark) });
         card.Children.Add(new Border { CornerRadius = new CornerRadius(Radius + 0.5), Margin = new Thickness(-0.75), BorderThickness = new Thickness(0.75), BorderBrush = Glass.Outline(dark) });
         card.Children.Add(new Border { CornerRadius = new CornerRadius(Radius), BorderThickness = new Thickness(1), BorderBrush = Glass.Rim(dark) });
 
-        // Ícono de la app con una insignia de estado chiquita abajo a la derecha.
-        _badge = new TextBlock { FontFamily = Palette.IconFont, FontSize = 9, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var badgeDot = new Border
-        {
-            Width = 16,
-            Height = 16,
-            CornerRadius = new CornerRadius(8),
-            Background = new SolidColorBrush(_palette.Accent),
-            BorderThickness = new Thickness(1.5),
-            BorderBrush = new SolidColorBrush(dark ? Color.FromRgb(0x2A, 0x2A, 0x2F) : Colors.White),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(0, 0, -4, -4),
-            Child = _badge,
-            Visibility = Visibility.Collapsed,
-            Tag = "badge",
-        };
-        var icon = new Grid { Width = 38, Height = 38, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-        icon.Children.Add(new Border { CornerRadius = new CornerRadius(9), ClipToBounds = true, Background = new ImageBrush(AppIcon) { Stretch = Stretch.UniformToFill } });
-        icon.Children.Add(badgeDot);
+        // Anillo: pista tenue + arco de progreso.
+        _indicator.Children.Add(new Ellipse { Stroke = new SolidColorBrush(dark ? Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x12, 0, 0, 0)), StrokeThickness = RingStroke });
+        _ring.Stroke = new SolidColorBrush(RingColor());
+        _ring.RenderTransform = _spin;
+        _indicator.Children.Add(_ring);
 
-        _title = new TextBlock { Text = job.Operation.Label, FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = text, TextTrimming = TextTrimming.CharacterEllipsis };
-        _status = new TextBlock { Text = FileLine(job), FontSize = 12, Foreground = secondary, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 2, 0, 0) };
-        _barFill = new Border { CornerRadius = new CornerRadius(1.5), Background = new SolidColorBrush(_palette.Accent), HorizontalAlignment = HorizontalAlignment.Left, Width = 0 };
-        _barTrack = new Border
-        {
-            Height = 3,
-            CornerRadius = new CornerRadius(1.5),
-            Margin = new Thickness(0, 8, 0, 0),
-            Background = new SolidColorBrush(dark ? Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x1A, 0, 0, 0)),
-            Child = _barFill,
-            ClipToBounds = true,
-        };
-
-        var head = new DockPanel();
-        DockPanel.SetDock(_buttons, Dock.Right);
-        head.Children.Add(_buttons);
-        head.Children.Add(_title);
-        var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        info.Children.Add(head);
+        _title = new TextBlock { FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Glass.Text(dark)), TextTrimming = TextTrimming.CharacterEllipsis };
+        _status = new TextBlock { FontSize = 11.5, Foreground = new SolidColorBrush(Glass.Secondary(dark)), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 0) };
+        var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 8, 0) };
+        info.Children.Add(_title);
         info.Children.Add(_status);
-        info.Children.Add(_barTrack);
 
-        var content = new DockPanel { Margin = new Thickness(14, 10, 16, 10) };
-        DockPanel.SetDock(icon, Dock.Left);
-        content.Children.Add(icon);
+        var content = new DockPanel { Margin = new Thickness(12, 0, 12, 0) };
+        DockPanel.SetDock(_indicator, Dock.Left);
+        DockPanel.SetDock(_buttons, Dock.Right);
+        content.Children.Add(_indicator);
+        content.Children.Add(_buttons);
         content.Children.Add(info);
         card.Children.Add(content);
+        card.MouseLeftButtonUp += (_, e) => { if (!e.Handled) OpenResult(); };
 
         var outer = new Grid();
         outer.Children.Add(Glass.RectShadow(Radius, ShadowMargin, dark));
         outer.Children.Add(card);
         Content = outer;
 
-        AddButton("Cancelar", () => _job.Cancel());
-
-        _autoClose = new DispatcherTimer(TimeSpan.FromSeconds(4), DispatcherPriority.Normal, (_, _) => FadeOut(), Dispatcher) { IsEnabled = false };
-        MouseEnter += (_, _) => _autoClose.Stop();
-        MouseLeave += (_, _) => { if (_job.State == JobState.Done) _autoClose.Start(); };
+        _autoClose = new DispatcherTimer(TimeSpan.FromSeconds(4.5), DispatcherPriority.Normal, (_, _) => FadeOut(), Dispatcher) { IsEnabled = false };
+        MouseEnter += (_, _) =>
+        {
+            _autoClose.Stop();
+            _buttons.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(120)));
+        };
+        MouseLeave += (_, _) =>
+        {
+            if (_job.State != JobState.Failed)
+                _buttons.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(160)));
+            if (_job.State == JobState.Done)
+                _autoClose.Start();
+        };
 
         SourceInitialized += (_, _) => Win32.AddExStyle(new WindowInteropHelper(this).Handle, Win32.WS_EX_NOACTIVATE | Win32.WS_EX_TOOLWINDOW);
 
@@ -140,17 +122,9 @@ internal sealed class JobToast : Window
         Refresh(job);
     }
 
-    private static BitmapImage LoadIcon()
-    {
-        var image = new BitmapImage();
-        image.BeginInit();
-        image.UriSource = new Uri("pack://application:,,,/Assets/mandarina.png");
-        image.DecodePixelWidth = 96;
-        image.CacheOption = BitmapCacheOption.OnLoad;
-        image.EndInit();
-        image.Freeze();
-        return image;
-    }
+    private Color Success => Dark ? Color.FromRgb(0x30, 0xD1, 0x58) : Color.FromRgb(0x28, 0xA7, 0x45);
+
+    private Color RingColor() => Dark ? Lighter(_palette.Accent, 0.6) : _palette.Accent;
 
     private static string FileLine(Job job)
     {
@@ -158,88 +132,236 @@ internal sealed class JobToast : Window
         return job.Files.Count > 1 ? $"{first} y {job.Files.Count - 1} más" : first;
     }
 
+    /// <summary>"JPG" → "Convirtiendo a JPG"; las herramientas y acciones se muestran tal cual.</summary>
+    private static string Doing(IOperation op) => op.Wheel == WheelKind.Convert ? $"Convirtiendo a {op.Label}" : op.Label;
+
+    private static string DoneTitle(IOperation op) => op.Wheel == WheelKind.Convert ? $"Convertido a {op.Label}" : $"{op.Label}: listo";
+
     private void Refresh(Job job)
     {
         switch (job.State)
         {
             case JobState.Queued:
+                _title.Text = Doing(job.Operation);
                 _status.Text = $"En espera · {FileLine(job)}";
+                Spin(true);
+                SetButtons(("", "Cancelar", () => _job.Cancel()));
                 break;
             case JobState.Running:
-                SetProgress(job.Progress);
+                _title.Text = Doing(job.Operation);
                 _status.Text = FileLine(job);
+                if (job.Progress > 0)
+                {
+                    Spin(false);
+                    SetProgress(job.Progress);
+                }
+                else
+                    Spin(true);
+                SetButtons(("", "Cancelar", () => _job.Cancel()));
                 break;
             case JobState.Done:
-                SetProgress(1);
-                _barTrack.Visibility = Visibility.Collapsed;
-                Badge("", _palette.Accent);
+                Spin(false);
+                _title.Text = DoneTitle(job.Operation);
                 _status.Text = job.Outputs.Count switch
                 {
-                    0 => job.Operation.Id == "copy-path" ? "Ruta copiada al portapapeles" : "Listo",
+                    0 => job.Operation.Id == "copy-path" ? "Ruta copiada al portapapeles" : FileLine(job),
                     1 => System.IO.Path.GetFileName(job.Outputs[0]),
                     var n => $"{n} archivos creados",
                 };
-                _buttons.Children.Clear();
+                ShowResult(job);
                 if (job.Outputs.Count > 0)
-                {
-                    AddButton("Mostrar", () => Reveal(job.Outputs[0]));
-                    AddButton("Abrir", () => Open(job.Outputs.Count == 1 ? job.Outputs[0] : System.IO.Path.GetDirectoryName(job.Outputs[0])!));
-                }
+                    SetButtons(("", "Mostrar en carpeta", () => Reveal(job.Outputs[0])), ("", "Abrir", OpenResult));
+                else
+                    SetButtons();
                 if (!IsMouseOver)
                     _autoClose.Start();
                 break;
             case JobState.Failed:
-                _barTrack.Visibility = Visibility.Collapsed;
-                Badge("", _palette.Danger);
-                _title.Text = $"No se pudo: {job.Operation.Label}";
+                Spin(false);
+                _title.Text = $"No se pudo: {Doing(job.Operation).Replace("Convirtiendo", "convertir")}";
                 _status.Text = job.Error ?? "Error desconocido";
                 _status.ToolTip = job.Error;
-                _buttons.Children.Clear();
-                AddButton("Cerrar", FadeOut);
+                Symbol("", _palette.Danger);
+                SetButtons(("", "Cerrar", FadeOut));
+                _buttons.Opacity = 1;
                 break;
             case JobState.Canceled:
-                _barTrack.Visibility = Visibility.Collapsed;
-                _status.Text = "Cancelado";
-                _buttons.Children.Clear();
+                Spin(false);
+                _title.Text = "Cancelado";
+                _status.Text = FileLine(job);
+                Symbol("", Glass.Secondary(Dark));
+                SetButtons();
                 _autoClose.Interval = TimeSpan.FromSeconds(1.5);
                 _autoClose.Start();
                 break;
         }
     }
 
+    // ---------- Anillo ----------
+
     private void SetProgress(double p)
     {
-        _barTrack.UpdateLayout();
-        var width = Math.Max(0, (_barTrack.ActualWidth > 0 ? _barTrack.ActualWidth : CardWidth - 80) * Math.Clamp(p, 0.04, 1));
-        _barFill.BeginAnimation(WidthProperty, new DoubleAnimation(width, TimeSpan.FromMilliseconds(180)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+        _shownProgress = Math.Clamp(p, 0.02, 0.999);
+        _ring.Data = Arc(_shownProgress);
     }
 
-    private void Badge(string glyph, Color color)
+    /// <summary>Arco del anillo desde arriba, en sentido horario, que cubre <paramref name="fraction"/> de la vuelta.</summary>
+    private static Geometry Arc(double fraction)
     {
-        _badge.Text = glyph;
-        if (_badge.Parent is Border dot)
+        var r = (RingSize - RingStroke) / 2;
+        var c = RingSize / 2;
+        var angle = fraction * 2 * Math.PI;
+        var start = new Point(c, c - r);
+        var end = new Point(c + r * Math.Sin(angle), c - r * Math.Cos(angle));
+        var figure = new PathFigure { StartPoint = start, IsClosed = false };
+        figure.Segments.Add(new ArcSegment(end, new Size(r, r), 0, fraction > 0.5, SweepDirection.Clockwise, true));
+        var g = new PathGeometry([figure]);
+        g.Freeze();
+        return g;
+    }
+
+    /// <summary>Sin porcentaje conocido: un arco corto que gira. Se detiene en cuanto hay progreso o termina.</summary>
+    private void Spin(bool on)
+    {
+        if (on == _spinning)
+            return;
+        _spinning = on;
+        if (on)
         {
-            dot.Background = new SolidColorBrush(color);
-            dot.Visibility = Visibility.Visible;
+            _ring.Data = Arc(0.28);
+            _spin.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(0, 360, TimeSpan.FromSeconds(0.9)) { RepeatBehavior = RepeatBehavior.Forever });
+        }
+        else
+        {
+            _spin.BeginAnimation(RotateTransform.AngleProperty, null);
+            _spin.Angle = 0;
         }
     }
 
-    private void AddButton(string label, Action onClick)
+    /// <summary>Al terminar: miniatura redonda si el resultado es una imagen; si no, un ✓ dentro del anillo lleno.</summary>
+    private void ShowResult(Job job)
     {
-        var accent = new SolidColorBrush(Dark ? Lighter(_palette.Accent) : _palette.Accent);
-        var text = new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.Medium, Foreground = accent, Margin = new Thickness(12, 0, 0, 0), Cursor = Cursors.Hand, Opacity = 0.9 };
-        text.MouseLeftButtonUp += (_, e) => { e.Handled = true; onClick(); };
-        text.MouseEnter += (_, _) => text.Opacity = 1;
-        text.MouseLeave += (_, _) => text.Opacity = 0.9;
-        _buttons.Children.Add(text);
+        var image = job.Outputs.FirstOrDefault(o => Formats.KindOf(o) == FileKind.Image && System.IO.File.Exists(o));
+        if (image is not null && Thumb(image) is { } thumb)
+        {
+            _indicator.Children.Clear();
+            var circle = new Ellipse
+            {
+                Fill = new ImageBrush(thumb) { Stretch = Stretch.UniformToFill },
+                Stroke = new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)),
+                StrokeThickness = 1,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = new ScaleTransform(0.6, 0.6),
+                Opacity = 0,
+            };
+            _indicator.Children.Add(circle);
+            Pop(circle);
+            return;
+        }
+        Symbol("", Success); // Éxito en verde (el de macOS): con acentos grises de Windows el ✓ se perdía.
     }
 
-    private static Color Lighter(Color c) => Color.FromRgb((byte)(c.R + (255 - c.R) * 0.4), (byte)(c.G + (255 - c.G) * 0.4), (byte)(c.B + (255 - c.B) * 0.4));
-
-    private static void Open(string path)
+    private void Symbol(string glyph, Color color)
     {
-        try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
-        catch (Exception e) { Core.Log.Error($"Abrir {path}", e); }
+        _indicator.Children.Clear();
+        _indicator.Children.Add(new Ellipse { Stroke = new SolidColorBrush(color), StrokeThickness = RingStroke });
+        var mark = new TextBlock
+        {
+            FontFamily = Palette.IconFont,
+            Text = glyph,
+            FontSize = 14,
+            Foreground = new SolidColorBrush(color),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            RenderTransform = new ScaleTransform(0.6, 0.6),
+            Opacity = 0,
+        };
+        _indicator.Children.Add(mark);
+        Pop(mark);
+    }
+
+    private static void Pop(UIElement element)
+    {
+        var s = (ScaleTransform)element.RenderTransform;
+        var spring = new BackEase { Amplitude = 0.4, EasingMode = EasingMode.EaseOut };
+        var grow = new DoubleAnimation(1, TimeSpan.FromMilliseconds(260)) { EasingFunction = spring };
+        s.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        s.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        element.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(140)));
+    }
+
+    private static BitmapImage? Thumb(string path)
+    {
+        try
+        {
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.UriSource = new Uri(path);
+            image.DecodePixelWidth = 96;
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+        catch (Exception)
+        {
+            // WebP/AVIF/HEIC sin códec de Windows: queda el ✓.
+            return null;
+        }
+    }
+
+    // ---------- Botones redondos ----------
+
+    private void SetButtons(params (string Glyph, string Tip, Action OnClick)[] buttons)
+    {
+        _buttons.Children.Clear();
+        foreach (var (glyph, tip, onClick) in buttons)
+            _buttons.Children.Add(RoundButton(glyph, tip, onClick));
+    }
+
+    private Border RoundButton(string glyph, string tip, Action onClick)
+    {
+        var dark = Dark;
+        var idle = new SolidColorBrush(Glass.Chip(dark));
+        var hover = new SolidColorBrush(dark ? Color.FromArgb(0x4A, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
+        var button = new Border
+        {
+            Width = 28,
+            Height = 28,
+            CornerRadius = new CornerRadius(14),
+            Margin = new Thickness(6, 0, 0, 0),
+            Background = idle,
+            BorderThickness = new Thickness(0.75),
+            BorderBrush = Glass.Outline(dark),
+            ToolTip = tip,
+            Child = new TextBlock
+            {
+                FontFamily = Palette.IconFont,
+                Text = glyph,
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Glass.Text(dark)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+        button.MouseEnter += (_, _) => button.Background = hover;
+        button.MouseLeave += (_, _) => button.Background = idle;
+        button.MouseLeftButtonUp += (_, e) => { e.Handled = true; onClick(); };
+        return button;
+    }
+
+    private static Color Lighter(Color c, double amount) =>
+        Color.FromRgb((byte)(c.R + (255 - c.R) * amount), (byte)(c.G + (255 - c.G) * amount), (byte)(c.B + (255 - c.B) * amount));
+
+    private void OpenResult()
+    {
+        if (_job.State != JobState.Done || _job.Outputs.Count == 0)
+            return;
+        var target = _job.Outputs.Count == 1 ? _job.Outputs[0] : System.IO.Path.GetDirectoryName(_job.Outputs[0])!;
+        try { Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
+        catch (Exception e) { Core.Log.Error($"Abrir {target}", e); }
+        FadeOut();
     }
 
     private static void Reveal(string path)
@@ -259,8 +381,8 @@ internal sealed class JobToast : Window
         _glass.Source = GlassCapture.Capture(x, y, (int)(CardWidth * scale), (int)(CardHeight * scale)) is { } shot ? Glass.Vibrant(shot, Dark) : null;
         Opacity = 0;
         Show();
-        BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(180)));
-        _slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(40, 0, TimeSpan.FromMilliseconds(320)) { EasingFunction = new BackEase { Amplitude = 0.2, EasingMode = EasingMode.EaseOut } });
+        BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)));
+        _slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(36, 0, TimeSpan.FromMilliseconds(300)) { EasingFunction = new BackEase { Amplitude = 0.2, EasingMode = EasingMode.EaseOut } });
     }
 
     public void MoveTo(double top) =>
@@ -272,16 +394,20 @@ internal sealed class JobToast : Window
             return;
         _closing = true;
         _autoClose.Stop();
-        var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(200));
+        Spin(false);
+        var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(180));
         fade.Completed += (_, _) =>
         {
             _glass.Source = null;
             Close();
             Gone?.Invoke(this);
         };
-        _slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(24, TimeSpan.FromMilliseconds(200)));
+        _slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(24, TimeSpan.FromMilliseconds(180)));
         BeginAnimation(OpacityProperty, fade);
     }
+
+    /// <summary>Para --snapshot: muestra los botones como si estuviera el mouse encima.</summary>
+    public void RevealButtons() => _buttons.Opacity = 1;
 
     /// <summary>Para --snapshot.</summary>
     public void SaveSnapshot(string path, BitmapSource? under)
@@ -302,10 +428,10 @@ internal sealed class JobToast : Window
     }
 }
 
-/// <summary>Apila las tarjetas abajo a la derecha del área de trabajo.</summary>
+/// <summary>Apila las cápsulas abajo a la derecha del área de trabajo.</summary>
 internal sealed class ToastStack
 {
-    private const double Gap = 10;
+    private const double Gap = 8;
     private const double Edge = 14;
     private readonly List<JobToast> _toasts = [];
 
