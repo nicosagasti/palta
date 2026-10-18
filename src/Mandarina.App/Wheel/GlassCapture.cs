@@ -14,7 +14,7 @@ internal static class GlassCapture
 {
     public const double Downscale = 0.25;
 
-    public static BitmapSource? Capture(int x, int y, int width, int height)
+    public static BitmapSource? Capture(int x, int y, int width, int height, double downscale = Downscale)
     {
         var screen = Win32.GetDC(IntPtr.Zero);
         var mem = Win32.CreateCompatibleDC(screen);
@@ -27,7 +27,12 @@ internal static class GlassCapture
             Win32.SelectObject(mem, old);
             old = IntPtr.Zero;
             var full = Imaging.CreateBitmapSourceFromHBitmap(bitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-            var small = new TransformedBitmap(full, new ScaleTransform(Downscale, Downscale));
+            if (downscale >= 1)
+            {
+                full.Freeze();
+                return full;
+            }
+            var small = new TransformedBitmap(full, new ScaleTransform(downscale, downscale));
             small.Freeze();
             return small;
         }

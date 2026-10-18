@@ -71,20 +71,86 @@ internal static class Bench
             };
             foreach (var c in cases)
             {
-                wheel.ShowForFiles(c.Wheel, c.Files, x, y);
+                var (sx, sy, size) = wheel.ScreenRect(x, y);
+                var under = Wheel.GlassCapture.Capture(sx, sy, size, size, 1);
+                wheel.ShowPreview(c.Wheel, c.Files, x, y);
                 wheel.SnapshotHover(c.Hover);
                 await Task.Delay(450);
                 var path = Path.Combine(folder, c.Name + ".png");
-                wheel.SaveSnapshot(path);
+                wheel.SaveSnapshot(path, under);
                 Console.WriteLine(path);
                 wheel.HideNow();
                 await Task.Delay(100);
             }
+            await SnapshotClipboard(folder, x, y);
+            await SnapshotToasts(folder);
         }
         catch (Exception e)
         {
             Console.WriteLine($"Snapshot falló: {e}");
         }
         exit();
+    }
+
+    private static async Task SnapshotClipboard(string folder, int x, int y)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "mandarina-snapshot-clip", Guid.NewGuid().ToString("N"));
+        var history = new Core.Clipboard.ClipboardHistory(dir);
+        var icon = Path.Combine(AppContext.BaseDirectory, "mandarina-snapshot.png");
+        using (var s = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/mandarina.png"))!.Stream)
+        using (var f = File.Create(icon))
+            s.CopyTo(f);
+        history.AddText("Receta de torta de mandarina: 3 huevos, 200 g de azúcar y la ralladura de dos mandarinas");
+        history.AddFiles([@"C:\Users\nicol\Documents\Presupuesto 2026.xlsx"]);
+        history.AddImage(File.ReadAllBytes(icon));
+        history.AddText("https://github.com/nicosagasti/tangerine");
+        var pinned = history.AddText("nicolas@ejemplo.com")!;
+        history.Pin(pinned.Id, true);
+        File.Delete(icon);
+
+        using var watcher = new Clips.ClipboardWatcher(history, System.Windows.Threading.Dispatcher.CurrentDispatcher) { Enabled = false };
+        var window = new Clips.ClipboardWindow(history, watcher);
+        var (left, top, w, h, m) = Clips.ClipboardWindow.PanelRect(x, y);
+        var under = Wheel.GlassCapture.Capture(left - m, top - m, w + 2 * m, h + 2 * m, 1);
+        window.ShowNear(x, y);
+        await Task.Delay(500);
+        var path = Path.Combine(folder, "portapapeles.png");
+        window.SaveSnapshot(path, under);
+        Console.WriteLine(path);
+        window.Close();
+        try { Directory.Delete(dir, true); } catch (IOException) { }
+    }
+
+    private static async Task SnapshotToasts(string folder)
+    {
+        var queue = new JobQueue(2);
+        var stack = new Jobs.ToastStack();
+        var gate = new TaskCompletionSource();
+        var running = new Operation("snap-run", WheelKind.Convert, "Convertir a JPG", "", _ => true, async (_, progress, _) =>
+        {
+            progress.Report(0.62);
+            await gate.Task;
+            return [];
+        });
+        var done = new Operation("snap-done", WheelKind.Tools, "Comprimir", "", _ => true, (_, _, _) =>
+            Task.FromResult<IReadOnlyList<string>>([@"C:\fotos\vacaciones (comprimida).jpg"]));
+        var toasts = new List<Jobs.JobToast>();
+        queue.JobAdded += job => toasts.Add(stack.Add(job));
+        queue.Enqueue(done, [@"C:\fotos\vacaciones.jpg"]);
+        await Task.Delay(300);
+        queue.Enqueue(running, [@"C:\fotos\atardecer.png", @"C:\fotos\playa.png"]);
+        await Task.Delay(700);
+        for (var i = 0; i < toasts.Count; i++)
+        {
+            var t = toasts[i];
+            var scale = Win32.ScaleAt((int)t.Left, (int)t.Top);
+            var under = Wheel.GlassCapture.Capture((int)(t.Left * scale), (int)(t.Top * scale), (int)(t.Width * scale), (int)(t.Height * scale), 1);
+            var path = Path.Combine(folder, $"aviso-{i + 1}.png");
+            t.SaveSnapshot(path, under);
+            Console.WriteLine(path);
+        }
+        gate.SetResult();
+        foreach (var t in toasts)
+            t.Close();
     }
 }

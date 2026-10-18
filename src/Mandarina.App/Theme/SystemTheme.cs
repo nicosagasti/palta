@@ -29,6 +29,12 @@ internal sealed record Palette(bool Dark, Color Text, Color SubText, Color Tint,
 
     private static bool IsDark()
     {
+        // Para las capturas de diseño: MANDARINA_THEME=light|dark fuerza un tema.
+        switch (Environment.GetEnvironmentVariable("MANDARINA_THEME"))
+        {
+            case "light": return false;
+            case "dark": return true;
+        }
         using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
         return key?.GetValue("AppsUseLightTheme") is int light && light == 0;
     }

@@ -25,8 +25,8 @@ public static class ImageOperations
         yield return Operation.PerFile("img-compress", WheelKind.Tools, "Comprimir", "", FileKind.Image, Compress);
         yield return Transform("img-half", "50 %", "", "50%", img => img.Resize(new Percentage(50)));
         yield return Transform("img-max1920", "1920 px", "", "1920px", img => img.Resize(new MagickGeometry(1920, 1920) { Greater = true }));
-        yield return Transform("img-rot-right", "Rotar ↻", "", "rotada", img => img.Rotate(90));
-        yield return Transform("img-rot-left", "Rotar ↺", "", "rotada", img => img.Rotate(-90));
+        yield return Transform("img-rot-right", "Girar der.", "", "rotada", img => img.Rotate(90));
+        yield return Transform("img-rot-left", "Girar izq.", "", "rotada", img => img.Rotate(-90));
         yield return Transform("img-strip", "Sin metadatos", "", "sin metadatos", img => img.Strip());
         yield return Operation.Combine("img-merge-pdf", WheelKind.Tools, "Unir en PDF", "", FileKind.Image, 2,
             (files, ct) => SafeWrite.WriteAsync(OutputPaths.For(files[0], ".pdf", "unidas"), tmp => Task.Run(() => PdfBackend.ImagesToPdf(files, tmp), ct), ct));

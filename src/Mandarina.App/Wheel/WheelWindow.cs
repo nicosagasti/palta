@@ -18,19 +18,23 @@ namespace Mandarina.App.Wheel;
 /// <summary>
 /// La rueda: una única ventana redonda, transparente y siempre encima que se reutiliza.
 /// En modo arrastre no toma el foco y recibe el drop OLE del Explorador; en modo teclado sí.
+/// Visualmente es un disco de vidrio sin divisiones: las opciones flotan y una "gota" de vidrio
+/// más brillante se desliza hasta la que está bajo el cursor.
 /// </summary>
 internal sealed class WheelWindow : Window
 {
-    private const double Side = 340;
-    private const double Outer = 150;
-    private const double Inner = 48;
-    private const double LabelRadius = (Inner + Outer) / 2 + 3;
-    private const double GapDegrees = 1.1;
-    private static readonly Point C = new(Side / 2, Side / 2);
+    private const double Side = 400;
+    private const double Outer = 148;
+    private const double Inner = 40;
+    private const double CenterRadius = 27;
+    private const double DropRadius = 35;
+    private const double LabelRadius = (Inner + Outer) / 2 + 6;
+    private static readonly Point C = new(Side / 2, Side / 2 - 10);
 
     private readonly Catalog _catalog;
     private readonly Func<string?> _lastOperationId;
     private readonly Canvas _layer = new() { Width = Side, Height = Side };
+    private readonly Canvas _sectorLayer = new() { Width = Side, Height = Side, IsHitTestVisible = false };
     private readonly Grid _root = new();
     private readonly ScaleTransform _scale = new(1, 1);
     private readonly DispatcherTimer _emptyTimer;
@@ -38,21 +42,27 @@ internal sealed class WheelWindow : Window
 
     private IntPtr _hwnd;
     private Palette _palette = Palette.Current();
+    private bool Dark => _palette.Dark;
     private BitmapSource? _backdrop;
     private WheelKind _wheel;
     private IReadOnlyList<string> _files = [];
     private List<IOperation> _ops = [];
-    private readonly List<(Path Shape, SolidColorBrush Fill, FrameworkElement Content)> _sectors = [];
+    private readonly List<FrameworkElement> _sectors = [];
     private int? _hover;
     private bool _keyboardMode;
     private bool _repeatMode;
     private bool _closing;
     private string? _message;
 
+    // Gota de vidrio que marca la opción bajo el cursor.
+    private readonly Grid _drop = new() { Width = DropRadius * 2, Height = DropRadius * 2, IsHitTestVisible = false, Opacity = 0, RenderTransformOrigin = new Point(0.5, 0.5) };
+    private readonly TranslateTransform _dropMove = new();
+    private readonly ScaleTransform _dropScale = new(0.8, 0.8);
+
     private Ellipse? _centerDisk;
-    private SolidColorBrush? _centerFill;
-    private TextBlock? _centerTitle;
     private TextBlock? _centerGlyph;
+    private TextBlock? _caption;
+    private Border? _captionChip;
 
     public event Action<IOperation, IReadOnlyList<string>>? OperationChosen;
 
@@ -77,11 +87,14 @@ internal sealed class WheelWindow : Window
         Focusable = true;
         FontFamily = Palette.UiFont;
         UseLayoutRounding = true;
+        TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
 
-        _root.RenderTransformOrigin = new Point(0.5, 0.5);
+        _drop.RenderTransform = new TransformGroup { Children = { _dropScale, _dropMove } };
+
+        _root.RenderTransformOrigin = new Point(0.5, C.Y / Side);
         _root.RenderTransform = _scale;
         _root.Children.Add(_layer);
-        // Fondo casi invisible: sin él, los píxeles totalmente transparentes no reciben el drop.
+        // Fondo transparente pero "pintado": sin él, WPF no hace hit-test y no llega el drop.
         _root.Background = Brushes.Transparent;
         Content = _root;
 
@@ -117,10 +130,9 @@ internal sealed class WheelWindow : Window
         Rebuild(animate: false);
         Show();
         UpdateLayout();
-        Highlight(0, true);
+        SetHover(0);
         Hide();
-        _layer.Children.Clear();
-        _sectors.Clear();
+        Clear();
         _files = [];
         _ops = [];
     }
@@ -154,7 +166,7 @@ internal sealed class WheelWindow : Window
             SetHover(0);
     }
 
-    /// <summary>Tocaron otra vez la misma tecla: un solo sector con la última acción.</summary>
+    /// <summary>Tocaron otra vez la misma tecla: una sola opción con la última acción.</summary>
     public void ShowRepeat()
     {
         if (!IsVisible || _lastOperationId() is not { } id || _catalog.ById(id) is not { } op)
@@ -189,8 +201,8 @@ internal sealed class WheelWindow : Window
 
         var scale = Win32.ScaleAt(x, y);
         var px = (int)Math.Round(Side * scale);
-        var (left, top) = (x - px / 2, y - px / 2);
-        _backdrop = GlassCapture.Capture(left, top, px, px);
+        var (left, top) = (x - px / 2, y - (int)Math.Round(C.Y * scale));
+        _backdrop = GlassCapture.Capture(left, top, px, px) is { } shot ? Glass.Vibrant(shot, Dark) : null;
 
         _ops = OpsFor(wheel);
         BuildStatic();
@@ -209,7 +221,6 @@ internal sealed class WheelWindow : Window
         _wheel = wheel;
         _repeatMode = false;
         _ops = OpsFor(wheel);
-        UpdateCenter();
         Rebuild(animate: true);
     }
 
@@ -219,7 +230,7 @@ internal sealed class WheelWindow : Window
         if (_files.Count == 0 && IsVisible)
         {
             _message = "Nada para hacer con esto";
-            UpdateCenter();
+            UpdateCaption();
         }
     }
 
@@ -241,7 +252,7 @@ internal sealed class WheelWindow : Window
         else if (files is null)
         {
             _message = "Nada para hacer con esto";
-            UpdateCenter();
+            UpdateCaption();
         }
         OnDragOver(sender, e);
     }
@@ -325,12 +336,11 @@ internal sealed class WheelWindow : Window
             return;
         var op = _ops[index];
         var files = _files;
-        PulseSector(index);
         HideWheel();
         OperationChosen?.Invoke(op, files);
     }
 
-    // ---------- Resaltado ----------
+    // ---------- Resaltado: la gota ----------
 
     private void UpdateHover(Point p) => SetHover(WheelGeometry.SectorAt(p.X - C.X, p.Y - C.Y, _ops.Count, Inner, Outer));
 
@@ -341,57 +351,63 @@ internal sealed class WheelWindow : Window
         var previous = _hover;
         _hover = sector;
         if (previous is >= 0 && previous < _sectors.Count)
-            Highlight(previous.Value, false);
+            Emphasize(_sectors[previous.Value], false);
         if (sector is >= 0 && sector < _sectors.Count)
-            Highlight(sector.Value, true);
+        {
+            Emphasize(_sectors[sector.Value], true);
+            MoveDrop(sector.Value, appear: previous is not >= 0);
+        }
+        else
+            HideDrop();
         UpdateCenter();
     }
 
-    private void Highlight(int i, bool on)
+    private void MoveDrop(int index, bool appear)
     {
-        var (shape, fill, content) = _sectors[i];
-        // Un filo de luz alrededor del sector resaltado.
-        shape.Stroke = on ? new SolidColorBrush(Color.FromArgb((byte)(_palette.Dark ? 0x70 : 0xB0), 0xFF, 0xFF, 0xFF)) : null;
-        shape.StrokeThickness = 1;
-        var target = on ? _palette.Hover : IdleSectorColor();
-        fill.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(target, TimeSpan.FromMilliseconds(90)));
+        var (x, y) = _ops.Count == 1 ? (0.0, -LabelRadius) : WheelGeometry.SectorCenter(index, _ops.Count, LabelRadius);
+        var spring = new BackEase { Amplitude = 0.28, EasingMode = EasingMode.EaseOut };
+        var duration = TimeSpan.FromMilliseconds(appear ? 0 : 210);
+        _dropMove.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x, duration) { EasingFunction = spring });
+        _dropMove.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(y, duration) { EasingFunction = spring });
+        _drop.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(110)));
+        var grow = new DoubleAnimation(1, TimeSpan.FromMilliseconds(appear ? 180 : 120)) { EasingFunction = spring };
+        _dropScale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        _dropScale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+    }
+
+    private void HideDrop()
+    {
+        _drop.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(120)));
+        var shrink = new DoubleAnimation(0.8, TimeSpan.FromMilliseconds(120));
+        _dropScale.BeginAnimation(ScaleTransform.ScaleXProperty, shrink);
+        _dropScale.BeginAnimation(ScaleTransform.ScaleYProperty, shrink);
+    }
+
+    private static void Emphasize(FrameworkElement content, bool on)
+    {
         var s = (ScaleTransform)content.RenderTransform;
-        var anim = new DoubleAnimation(on ? 1.08 : 1, TimeSpan.FromMilliseconds(90)) { EasingFunction = new QuadraticEase() };
+        var anim = new DoubleAnimation(on ? 1.07 : 1, TimeSpan.FromMilliseconds(140)) { EasingFunction = new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut } };
         s.BeginAnimation(ScaleTransform.ScaleXProperty, anim);
         s.BeginAnimation(ScaleTransform.ScaleYProperty, anim);
+        if (content.Tag is TextBlock label)
+            label.Opacity = on ? 1 : 0.72;
     }
-
-    private void PulseSector(int i)
-    {
-        if (i < _sectors.Count)
-            _sectors[i].Fill.Color = Palette.WithAlpha(_palette.Hover, 0xB0);
-    }
-
-    private Color IdleSectorColor() => _palette.Dark ? Color.FromArgb(0x0A, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF);
 
     // ---------- Dibujo ----------
 
-    /// <summary>Capas fijas del vidrio: sombra, fondo desenfocado, refracción, tinte, brillo y bordes.</summary>
+    /// <summary>Capas fijas del vidrio: sombra, fondo con vibrancia, tinte, brillo, filo y centro.</summary>
     private void BuildStatic()
     {
-        _layer.Children.Clear();
-        _sectors.Clear();
-        var p = _palette;
+        Clear();
+        var dark = Dark;
 
-        // Sombra suave debajo del disco.
-        var shadow = new Ellipse
-        {
-            Width = (Outer + 16) * 2,
-            Height = (Outer + 16) * 2,
-            Fill = new RadialGradientBrush(
-                [new GradientStop(Color.FromArgb((byte)(p.Dark ? 0x70 : 0x40), 0, 0, 0), 0.82), new GradientStop(Colors.Transparent, 1)]),
-        };
-        Place(shadow, C.X, C.Y + 6);
+        var shadow = new Ellipse { Width = (Outer + 34) * 2, Height = (Outer + 34) * 2, Fill = Glass.DiskShadow(dark) };
+        Place(shadow, C.X, C.Y + 12);
 
         var disk = new EllipseGeometry(C, Outer, Outer);
+        disk.Freeze();
         if (_backdrop is not null)
         {
-            // Fondo desenfocado (la captura ya viene a 1/4, el blur termina de suavizar).
             _layer.Children.Add(new Image
             {
                 Source = _backdrop,
@@ -399,214 +415,221 @@ internal sealed class WheelWindow : Window
                 Height = Side,
                 Stretch = Stretch.Fill,
                 Clip = disk,
-                Effect = new BlurEffect { Radius = 14, KernelType = KernelType.Gaussian, RenderingBias = RenderingBias.Performance },
-            });
-            // "Refracción": cerca del borde el fondo se ve un poco agrandado, como a través de una lente.
-            _layer.Children.Add(new Image
-            {
-                Source = _backdrop,
-                Width = Side,
-                Height = Side,
-                Stretch = Stretch.Fill,
-                RenderTransformOrigin = new Point(0.5, 0.5),
-                RenderTransform = new ScaleTransform(1.09, 1.09),
-                Clip = SectorShapes.Ring(C, Outer - 16, Outer),
-                Opacity = 0.6,
-                Effect = new BlurEffect { Radius = 8, RenderingBias = RenderingBias.Performance },
+                Effect = new BlurEffect { Radius = 18, KernelType = KernelType.Gaussian, RenderingBias = RenderingBias.Performance },
             });
         }
+        AddDisk(Outer, new SolidColorBrush(Glass.Tint(dark)));
+        AddDisk(Outer, Glass.Specular(dark));
+        Place(new Ellipse { Width = Outer * 2 + 1.5, Height = Outer * 2 + 1.5, Stroke = Glass.Outline(dark), StrokeThickness = 0.75 }, C.X, C.Y);
+        Place(new Ellipse { Width = Outer * 2 - 1, Height = Outer * 2 - 1, Stroke = Glass.Rim(dark), StrokeThickness = 1 }, C.X, C.Y);
 
-        // Tinte del vidrio, un poco más claro hacia el centro (luz que atraviesa).
-        AddDisk(Outer, new RadialGradientBrush(
-            [new GradientStop(Palette.WithAlpha(p.Tint, (byte)(p.Tint.A * 0.7)), 0.3), new GradientStop(p.Tint, 1)]));
+        // La gota: vidrio más claro con su propio filo de luz.
+        _drop.Children.Clear();
+        _drop.Children.Add(new Ellipse { Fill = new SolidColorBrush(dark ? Color.FromArgb(0x2C, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0xA8, 0xFF, 0xFF, 0xFF)) });
+        _drop.Children.Add(new Ellipse { Fill = Glass.Specular(dark) });
+        _drop.Children.Add(new Ellipse { Stroke = Glass.Rim(dark), StrokeThickness = 1 });
+        _drop.Opacity = 0;
+        _dropScale.ScaleX = _dropScale.ScaleY = 0.8;
+        Place(_drop, C.X, C.Y);
+        _layer.Children.Add(_sectorLayer);
 
-        // Brillo líquido: luz desde arriba, reflejo tenue abajo.
-        AddDisk(Outer, new LinearGradientBrush(
-            [
-                new GradientStop(Color.FromArgb((byte)(p.Dark ? 0x30 : 0x55), 0xFF, 0xFF, 0xFF), 0),
-                new GradientStop(Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF), 0.42),
-                new GradientStop(Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF), 0.78),
-                new GradientStop(Color.FromArgb((byte)(p.Dark ? 0x14 : 0x26), 0xFF, 0xFF, 0xFF), 1),
-            ], new Point(0.5, 0), new Point(0.5, 1)));
-
-        // Borde especular: brillante arriba a la izquierda, apagado al medio, rebote abajo a la derecha.
-        var rim = new Ellipse
-        {
-            Width = Outer * 2,
-            Height = Outer * 2,
-            StrokeThickness = 1.4,
-            Stroke = new LinearGradientBrush(
-                [
-                    new GradientStop(Color.FromArgb(0xE0, 0xFF, 0xFF, 0xFF), 0),
-                    new GradientStop(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF), 0.45),
-                    new GradientStop(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF), 0.6),
-                    new GradientStop(Color.FromArgb(0x90, 0xFF, 0xFF, 0xFF), 1),
-                ], new Point(0.15, 0), new Point(0.85, 1)),
-        };
-        Place(rim, C.X, C.Y);
-        var innerShade = new Ellipse
-        {
-            Width = Outer * 2 - 3,
-            Height = Outer * 2 - 3,
-            StrokeThickness = 1,
-            Stroke = new SolidColorBrush(Color.FromArgb((byte)(p.Dark ? 0x40 : 0x14), 0, 0, 0)),
-        };
-        Place(innerShade, C.X, C.Y);
-
-        // Centro: un disco de vidrio más denso con el nombre de la rueda o "×".
-        _centerFill = new SolidColorBrush(p.CenterTint);
+        // Centro: un círculo sereno con una ✕ tenue.
         _centerDisk = new Ellipse
         {
-            Width = (Inner - 5) * 2,
-            Height = (Inner - 5) * 2,
-            Fill = _centerFill,
+            Width = CenterRadius * 2,
+            Height = CenterRadius * 2,
+            Fill = new SolidColorBrush(Glass.Chip(dark)),
+            Stroke = Glass.Rim(dark),
             StrokeThickness = 1,
-            Stroke = new LinearGradientBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF), Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF), 90),
         };
         Place(_centerDisk, C.X, C.Y);
+        _centerGlyph = new TextBlock { FontFamily = Palette.IconFont, Text = "\uE711", FontSize = 11, Foreground = new SolidColorBrush(Glass.Secondary(dark)), IsHitTestVisible = false };
+        Place(_centerGlyph, C.X, C.Y);
 
-        _centerGlyph = new TextBlock
+        // Cápsula debajo: qué rueda es y sobre qué archivo.
+        _caption = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(Glass.Text(dark)), TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 260 };
+        _captionChip = new Border
         {
-            FontFamily = Palette.IconFont,
-            Text = "",
-            FontSize = 16,
-            Foreground = new SolidColorBrush(p.Text),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Opacity = 0,
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(12, 5, 12, 6),
+            Background = new SolidColorBrush(dark ? Color.FromArgb(0xE0, 0x2A, 0x2A, 0x2F) : Color.FromArgb(0xEE, 0xFA, 0xFA, 0xFC)),
+            BorderBrush = Glass.Outline(dark),
+            BorderThickness = new Thickness(0.75),
+            Child = _caption,
+            IsHitTestVisible = false,
         };
-        _centerTitle = new TextBlock
-        {
-            FontSize = 11,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(p.SubText),
-            TextAlignment = TextAlignment.Center,
-            TextWrapping = TextWrapping.Wrap,
-            Width = (Inner - 10) * 2,
-        };
-        var center = new Grid { Width = Inner * 2, Height = Inner * 2, IsHitTestVisible = false };
-        center.Children.Add(_centerGlyph);
-        center.Children.Add(_centerTitle);
-        _centerGlyph.VerticalAlignment = VerticalAlignment.Center;
-        _centerTitle.VerticalAlignment = VerticalAlignment.Center;
-        Place(center, C.X, C.Y);
+        _layer.Children.Add(_captionChip);
+        UpdateCaption();
         UpdateCenter();
     }
 
-    /// <summary>Sectores (se rehacen al cambiar de rueda o de archivos).</summary>
+    private void Clear()
+    {
+        _layer.Children.Clear();
+        _sectorLayer.Children.Clear();
+        _sectors.Clear();
+    }
+
+    /// <summary>Opciones (se rehacen al cambiar de rueda o de archivos).</summary>
     private void Rebuild(bool animate)
     {
-        foreach (var (shape, _, content) in _sectors)
-        {
-            _layer.Children.Remove(shape);
-            _layer.Children.Remove(content);
-        }
+        _sectorLayer.Children.Clear();
         _sectors.Clear();
         _hover = null;
+        HideDrop();
 
         var n = _ops.Count;
-        var insertAt = _layer.Children.IndexOf(_centerDisk!);
         for (var i = 0; i < n; i++)
         {
-            var width = 360.0 / n;
-            var geometry = n == 1
-                ? SectorShapes.Ring(C, Inner + 2, Outer - 3)
-                : SectorShapes.Wedge(C, Inner + 2, Outer - 3, i * width - width / 2 + GapDegrees, i * width + width / 2 - GapDegrees);
-            var fill = new SolidColorBrush(IdleSectorColor());
-            var shape = new Path { Data = geometry, Fill = fill, IsHitTestVisible = false };
-            _layer.Children.Insert(insertAt++, shape);
-
             var content = SectorContent(_ops[i], i);
             var (x, y) = n == 1 ? (0.0, -LabelRadius) : WheelGeometry.SectorCenter(i, n, LabelRadius);
-            Place(content, C.X + x, C.Y + y);
-            _sectors.Add((shape, fill, content));
+            _sectorLayer.Children.Add(content);
+            content.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            Canvas.SetLeft(content, C.X + x - content.DesiredSize.Width / 2);
+            Canvas.SetTop(content, C.Y + y - content.DesiredSize.Height / 2);
+            _sectors.Add(content);
 
             if (animate)
             {
+                // Aparecen escalonadas, deslizándose apenas desde el centro hacia afuera.
+                var delay = TimeSpan.FromMilliseconds(20 + i * 14);
+                var len = Math.Max(1, Math.Sqrt(x * x + y * y));
+                var slide = new TranslateTransform();
+                var inner = (FrameworkElement)((Border)content).Child;
+                inner.RenderTransform = slide;
                 content.Opacity = 0;
-                var delay = TimeSpan.FromMilliseconds(30 + i * 12);
-                content.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(140)) { BeginTime = delay });
-                var slide = (TranslateTransform)content.Tag;
-                slide.BeginAnimation(TranslateTransform.YProperty,
-                    new DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(180)) { BeginTime = delay, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+                var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+                content.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)) { BeginTime = delay });
+                slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(-x / len * 8, 0, TimeSpan.FromMilliseconds(220)) { BeginTime = delay, EasingFunction = ease });
+                slide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(-y / len * 8, 0, TimeSpan.FromMilliseconds(220)) { BeginTime = delay, EasingFunction = ease });
             }
         }
+        UpdateCaption();
         UpdateCenter();
     }
 
     private FrameworkElement SectorContent(IOperation op, int index)
     {
-        var p = _palette;
+        var dark = Dark;
+        var text = new SolidColorBrush(Glass.Text(dark));
         var isFormat = _wheel == WheelKind.Convert && !_repeatMode;
-        var stack = new StackPanel { Width = 78, IsHitTestVisible = false };
-        if (_repeatMode)
+        var stack = new StackPanel { IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Center };
+        TextBlock? label = null;
+
+        if (isFormat)
         {
-            stack.Children.Add(new TextBlock { Text = "Repetir", FontSize = 11, Foreground = new SolidColorBrush(p.SubText), HorizontalAlignment = HorizontalAlignment.Center });
+            stack.Children.Add(FileBadge(op.Label));
         }
-        else if (!isFormat)
+        else
         {
             stack.Children.Add(new TextBlock
             {
                 FontFamily = Palette.IconFont,
-                Text = op.Glyph,
-                FontSize = 17,
-                Foreground = new SolidColorBrush(p.Text),
+                Text = _repeatMode ? "\uE72C" : op.Glyph,
+                FontSize = 18,
+                Foreground = text,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 3),
+                Margin = new Thickness(0, 0, 0, 5),
             });
+            label = new TextBlock
+            {
+                Text = _repeatMode ? $"Repetir: {op.Label}" : op.Label,
+                FontSize = 11.5,
+                FontWeight = FontWeights.Medium,
+                Foreground = text,
+                Opacity = 0.72,
+                TextAlignment = TextAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 76,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            };
+            stack.Children.Add(label);
         }
-        stack.Children.Add(new TextBlock
-        {
-            Text = op.Label,
-            FontSize = isFormat ? 15 : 12,
-            FontWeight = isFormat ? FontWeights.Bold : FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(p.Text),
-            TextAlignment = TextAlignment.Center,
-            TextWrapping = TextWrapping.Wrap,
-            HorizontalAlignment = HorizontalAlignment.Center,
-        });
         if (_keyboardMode && index < 9 && !_repeatMode)
-        {
-            stack.Children.Add(new TextBlock { Text = (index + 1).ToString(), FontSize = 9.5, Foreground = new SolidColorBrush(p.SubText), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) });
-        }
-        // El contenedor lleva la escala del resaltado; el contenido, el deslizamiento de entrada.
-        var slide = new TranslateTransform();
-        stack.RenderTransform = slide;
+            stack.Children.Add(new TextBlock { Text = (index + 1).ToString(), FontSize = 9.5, Foreground = new SolidColorBrush(Glass.Tertiary(dark)), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 3, 0, 0) });
+
+        // El contenedor lleva la escala del énfasis; el contenido, el deslizamiento de entrada.
         return new Border
         {
             Child = stack,
             IsHitTestVisible = false,
             RenderTransformOrigin = new Point(0.5, 0.5),
             RenderTransform = new ScaleTransform(1, 1),
-            Tag = slide,
+            Tag = label,
         };
     }
 
+    /// <summary>Ícono de documento con la extensión, como los de macOS: hoja clara, esquina doblada, sigla de color.</summary>
+    private FrameworkElement FileBadge(string ext)
+    {
+        var dark = Dark;
+        const double w = 32, h = 40, fold = 9, r = 4;
+        var page = Geometry.Parse(FormattableString.Invariant($"M{r},0 H{w - fold} L{w},{fold} V{h - r} Q{w},{h} {w - r},{h} H{r} Q0,{h} 0,{h - r} V{r} Q0,0 {r},0 Z"));
+        var corner = Geometry.Parse(FormattableString.Invariant($"M{w - fold},0 V{fold - 2.5} Q{w - fold},{fold} {w - fold + 2.5},{fold} H{w}"));
+        var color = ext == "PDF" ? Color.FromRgb(0xE5, 0x48, 0x4D) : _palette.Accent;
+        var grid = new Grid { Width = w, Height = h, HorizontalAlignment = HorizontalAlignment.Center };
+        grid.Children.Add(new Path
+        {
+            Data = page,
+            Fill = new LinearGradientBrush(Color.FromRgb(0xFF, 0xFF, 0xFF), Color.FromRgb(0xEE, 0xEE, 0xF1), 90),
+            Stroke = new SolidColorBrush(Color.FromArgb(0x30, 0, 0, 0)),
+            StrokeThickness = 0.75,
+        });
+        grid.Children.Add(new Path { Data = corner, Stroke = new SolidColorBrush(Color.FromArgb(0x30, 0, 0, 0)), StrokeThickness = 0.75 });
+        grid.Children.Add(new TextBlock
+        {
+            Text = ext,
+            FontSize = ext.Length > 3 ? 8.5 : 9.5,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(color),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 0, 7),
+        });
+        return grid;
+    }
+
+    private static Color Lighten(Color c) => Color.FromRgb((byte)(c.R + (255 - c.R) * 0.35), (byte)(c.G + (255 - c.G) * 0.35), (byte)(c.B + (255 - c.B) * 0.35));
+
     private void UpdateCenter()
     {
-        if (_centerTitle is null || _centerGlyph is null || _centerFill is null)
+        if (_centerDisk is null || _centerGlyph is null)
+            return;
+        var onCenter = _hover == -1;
+        _centerDisk.Fill = new SolidColorBrush(onCenter ? Palette.WithAlpha(_palette.Danger, 0x48) : Glass.Chip(Dark));
+        _centerGlyph.Foreground = new SolidColorBrush(onCenter ? (Dark ? Colors.White : _palette.Danger) : Glass.Secondary(Dark));
+    }
+
+    private void UpdateCaption()
+    {
+        if (_caption is null || _captionChip is null)
             return;
         if (_files.Count > 0 && _ops.Count == 0)
             _message = "Nada para hacer con esto";
         else if (_files.Count > 0 && _message == "Nada para hacer con esto")
             _message = null;
-        var onCenter = _hover == -1;
-        _centerTitle.Text = _message ?? (_wheel switch
+
+        var wheelName = _wheel switch { WheelKind.Convert => "Convertir", WheelKind.Tools => "Herramientas", _ => "Acciones" };
+        _caption.Inlines.Clear();
+        if (_message is not null)
+            _caption.Inlines.Add(new System.Windows.Documents.Run(_message) { Foreground = new SolidColorBrush(Glass.Secondary(Dark)) });
+        else
         {
-            WheelKind.Convert => "Convertir",
-            WheelKind.Tools => "Herramientas",
-            _ => "Acciones",
-        });
-        _centerTitle.FontSize = _message is null ? 11 : 9.5;
-        _centerTitle.Opacity = onCenter ? 0 : 1;
-        _centerGlyph.Opacity = onCenter ? 1 : 0;
-        _centerFill.Color = onCenter ? Palette.WithAlpha(_palette.Danger, 0x55) : _palette.CenterTint;
+            _caption.Inlines.Add(new System.Windows.Documents.Run(wheelName) { Foreground = new SolidColorBrush(Glass.Secondary(Dark)) });
+            if (_files.Count > 0)
+            {
+                var name = System.IO.Path.GetFileName(_files[0].TrimEnd('\\'));
+                var more = _files.Count > 1 ? $"  +{_files.Count - 1}" : "";
+                _caption.Inlines.Add(new System.Windows.Documents.Run("   " + name + more));
+            }
+        }
+        _captionChip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        Canvas.SetLeft(_captionChip, C.X - _captionChip.DesiredSize.Width / 2);
+        Canvas.SetTop(_captionChip, C.Y + Outer + 14);
     }
 
-    private void AddDisk(double radius, Brush fill)
-    {
-        var e = new Ellipse { Width = radius * 2, Height = radius * 2, Fill = fill, IsHitTestVisible = false };
-        Place(e, C.X, C.Y);
-    }
+    private void AddDisk(double radius, Brush fill) =>
+        Place(new Ellipse { Width = radius * 2, Height = radius * 2, Fill = fill, IsHitTestVisible = false }, C.X, C.Y);
 
     /// <summary>Agrega <paramref name="element"/> centrado en (x, y).</summary>
     private void Place(FrameworkElement element, double x, double y)
@@ -623,12 +646,17 @@ internal sealed class WheelWindow : Window
 
     private void AnimateOpen()
     {
-        var duration = TimeSpan.FromMilliseconds(160);
-        BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, duration));
-        var spring = new BackEase { Amplitude = 0.35, EasingMode = EasingMode.EaseOut };
-        var grow = new DoubleAnimation(0.86, 1, TimeSpan.FromMilliseconds(220)) { EasingFunction = spring };
+        BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
+        var spring = new BackEase { Amplitude = 0.22, EasingMode = EasingMode.EaseOut };
+        var grow = new DoubleAnimation(0.9, 1, TimeSpan.FromMilliseconds(260)) { EasingFunction = spring };
         _scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
         _scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        // Un leve desenfoque que se aclara; se saca al terminar para no costar nada mientras está abierta.
+        var blur = new BlurEffect { Radius = 6, RenderingBias = RenderingBias.Performance };
+        _root.Effect = blur;
+        var sharpen = new DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(150));
+        sharpen.Completed += (_, _) => _root.Effect = null;
+        blur.BeginAnimation(BlurEffect.RadiusProperty, sharpen);
     }
 
     public void HideWheel()
@@ -638,7 +666,7 @@ internal sealed class WheelWindow : Window
         if (!IsVisible || _closing)
             return;
         _closing = true;
-        var duration = TimeSpan.FromMilliseconds(110);
+        var duration = TimeSpan.FromMilliseconds(120);
         var fade = new DoubleAnimation(0, duration);
         fade.Completed += (_, _) =>
         {
@@ -647,40 +675,54 @@ internal sealed class WheelWindow : Window
             Hide();
             _closing = false;
             _backdrop = null;
-            _layer.Children.Clear();
-            _sectors.Clear();
+            Clear();
             if (_keyboardMode)
                 Win32.AddExStyle(_hwnd, Win32.WS_EX_NOACTIVATE);
             _keyboardMode = false;
             WheelHidden?.Invoke();
         };
-        var shrink = new DoubleAnimation(0.94, duration) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn } };
+        var shrink = new DoubleAnimation(0.95, duration) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn } };
         _scale.BeginAnimation(ScaleTransform.ScaleXProperty, shrink);
         _scale.BeginAnimation(ScaleTransform.ScaleYProperty, shrink);
         BeginAnimation(OpacityProperty, fade);
     }
 
-    /// <summary>Para --snapshot: fuerza el resaltado de un sector (-1 = centro).</summary>
+    /// <summary>Para --snapshot: abre como en un arrastre, pero con archivos ya conocidos.</summary>
+    public void ShowPreview(WheelKind wheel, IReadOnlyList<string> files, int x, int y)
+    {
+        _keyboardMode = false;
+        _files = files;
+        Open(wheel, x, y);
+    }
+
+    /// <summary>Para --snapshot: fuerza el resaltado de una opción (-1 = centro).</summary>
     public void SnapshotHover(int sector) => SetHover(sector);
 
-    /// <summary>Para --snapshot: guarda lo que se ve ahora (fondo + rueda) en PNG, a 2×.</summary>
-    public void SaveSnapshot(string path)
+    /// <summary>Para --snapshot: guarda lo que se ve ahora (fondo real + rueda) en PNG, a 2×.</summary>
+    public void SaveSnapshot(string path, BitmapSource? under)
     {
         const double dpi = 192;
         var bitmap = new RenderTargetBitmap((int)(Side * 2), (int)(Side * 2), dpi, dpi, PixelFormats.Pbgra32);
-        if (_backdrop is not null)
+        if (under is not null)
         {
-            // Debajo, el fondo real sin desenfocar, para ver el vidrio en contexto.
-            var under = new DrawingVisual();
-            using (var dc = under.RenderOpen())
-                dc.DrawImage(_backdrop, new Rect(0, 0, Side, Side));
-            bitmap.Render(under);
+            var visual = new DrawingVisual();
+            using (var dc = visual.RenderOpen())
+                dc.DrawImage(under, new Rect(0, 0, Side, Side));
+            bitmap.Render(visual);
         }
         bitmap.Render(_root);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var file = System.IO.File.Create(path);
         encoder.Save(file);
+    }
+
+    /// <summary>Para --snapshot: la región de pantalla que tiene detrás, en resolución completa.</summary>
+    public (int X, int Y, int Size) ScreenRect(int x, int y)
+    {
+        var scale = Win32.ScaleAt(x, y);
+        var px = (int)Math.Round(Side * scale);
+        return (x - px / 2, y - (int)Math.Round(C.Y * scale), px);
     }
 
     /// <summary>Para --bench: cierra al instante, sin animación.</summary>
@@ -690,8 +732,8 @@ internal sealed class WheelWindow : Window
         BeginAnimation(OpacityProperty, null);
         Hide();
         _closing = false;
-        _layer.Children.Clear();
-        _sectors.Clear();
+        _root.Effect = null;
+        Clear();
         _backdrop = null;
     }
 }
