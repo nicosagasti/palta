@@ -12,6 +12,15 @@ public static class Log
 
     public static void Info(string message) => Write("INFO", message);
 
+    /// <summary>Solo con la variable de entorno MANDARINA_DEBUG=1.</summary>
+    public static void Debug(string message)
+    {
+        if (DebugEnabled)
+            Write("DEBUG", message);
+    }
+
+    private static readonly bool DebugEnabled = Environment.GetEnvironmentVariable("MANDARINA_DEBUG") == "1";
+
     private static void Write(string level, string message)
     {
         try

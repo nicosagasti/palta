@@ -128,6 +128,7 @@ internal sealed class WheelWindow : Window
     /// <summary>Abre la rueda durante un arrastre; si ya está abierta, cambia de rueda en el lugar.</summary>
     public void ShowAt(WheelKind wheel, int x, int y)
     {
+        Core.Log.Debug($"ShowAt {wheel} ({x},{y}) visible={IsVisible}");
         if (IsVisible && !_closing)
         {
             _closeTimer.Stop();
@@ -168,6 +169,7 @@ internal sealed class WheelWindow : Window
     /// <summary>Se soltó el botón: si no hubo drop sobre la rueda, se cierra sola en un momento.</summary>
     public void EndDrag()
     {
+        Core.Log.Debug($"EndDrag visible={IsVisible}");
         if (IsVisible && !_keyboardMode)
             _closeTimer.Start();
     }
@@ -223,6 +225,7 @@ internal sealed class WheelWindow : Window
 
     private void OnDragEnter(object sender, DragEventArgs e)
     {
+        Core.Log.Debug($"DragEnter formats={string.Join(",", e.Data.GetFormats())} allowed={e.AllowedEffects}");
         _closeTimer.Stop();
         var files = e.Data.GetDataPresent(DataFormats.FileDrop) ? e.Data.GetData(DataFormats.FileDrop) as string[] : null;
         if (files is { Length: > 0 } && !files.SequenceEqual(_files))
@@ -257,6 +260,7 @@ internal sealed class WheelWindow : Window
     private void OnDrop(object sender, DragEventArgs e)
     {
         UpdateHover(e.GetPosition(this));
+        Core.Log.Debug($"Drop hover={_hover} ops={_ops.Count}");
         e.Effects = DragDropEffects.None;
         e.Handled = true;
         if (_hover is { } i and >= 0)
@@ -314,6 +318,7 @@ internal sealed class WheelWindow : Window
 
     private void Choose(int index)
     {
+        Core.Log.Debug($"Choose {index}");
         if (index < 0 || index >= _ops.Count)
             return;
         var op = _ops[index];
