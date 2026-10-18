@@ -9,7 +9,7 @@ public sealed class Catalog(IEnumerable<IOperation> operations)
     public IReadOnlyList<IOperation> All => _operations;
 
     public static Catalog CreateDefault(IShellHost host) =>
-        new([.. ActionOperations.All(host)]);
+        new([.. ImageOperations.All(), .. PdfOperations.All(), .. ActionOperations.All(host)]);
 
     /// <summary>Las opciones de <paramref name="wheel"/> que sirven para todos estos archivos, en orden de catálogo.</summary>
     public IReadOnlyList<IOperation> For(WheelKind wheel, IReadOnlyList<string> files) =>
