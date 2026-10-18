@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <!-- Solo para NotifyIcon (bandeja). -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Mandarina</AssemblyName>
+    <RootNamespace>Mandarina.App</RootNamespace>
+    <ApplicationIcon>Assets\mandarina.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.0.0</Version>
+    <!-- LibraryImport genera código unsafe. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- ThemeMode (Fluent) de WPF todavía está marcado como experimental. -->
+    <NoWarn>$(NoWarn);WPF0001;WFO0003</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- WinForms y WPF chocan en nombres (Application, MessageBox…): no los importamos globalmente. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\mandarina.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Mandarina.Core\Mandarina.Core.csproj" />
+  </ItemGroup>
+</Project>
