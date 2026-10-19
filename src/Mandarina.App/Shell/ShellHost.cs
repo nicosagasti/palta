@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
 using Mandarina.Core;
@@ -5,7 +6,7 @@ using Mandarina.Core;
 namespace Mandarina.App.Shell;
 
 /// <summary>Lo que las acciones piden a la interfaz; las operaciones corren en segundo plano, así que todo pasa al hilo de UI.</summary>
-internal sealed class ShellHost(Dispatcher dispatcher) : IShellHost
+internal sealed class ShellHost(Dispatcher dispatcher, Action<IReadOnlyList<string>> floatFiles) : IShellHost
 {
     public string? PickFolder(string title) => dispatcher.Invoke(() =>
     {
@@ -29,4 +30,21 @@ internal sealed class ShellHost(Dispatcher dispatcher) : IShellHost
             }
         }
     });
+
+    public void Share(IReadOnlyList<string> files) => dispatcher.Invoke(() => ShareSheet.Show(files));
+
+    public void Float(IReadOnlyList<string> files) => dispatcher.Invoke(() => floatFiles(files));
+
+    /// <summary>Windows Terminal si está (viene con Windows 11); si no, PowerShell.</summary>
+    public void OpenTerminal(string folder)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo("wt.exe", ["-d", folder]) { UseShellExecute = false });
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            Process.Start(new ProcessStartInfo("powershell.exe", "-NoExit") { WorkingDirectory = folder, UseShellExecute = true });
+        }
+    }
 }

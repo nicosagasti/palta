@@ -62,12 +62,21 @@ internal static class Bench
             var area = System.Windows.SystemParameters.WorkArea;
             var scale = Win32.ScaleAt(0, 0);
             var (x, y) = ((int)(area.Width * scale / 2), (int)(area.Height * scale / 2));
+            // Archivos reales de muestra: las acciones solo aparecen para archivos que existen.
+            var samples = Path.Combine(Path.GetTempPath(), "mandarina-snapshot-muestras");
+            Directory.CreateDirectory(Path.Combine(samples, "Fotos del viaje"));
+            var photo = Path.Combine(samples, "vacaciones.png");
+            using (var s = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/mandarina.png"))!.Stream)
+            using (var f = File.Create(photo))
+                s.CopyTo(f);
+            var report = Path.Combine(samples, "informe.pdf");
+            File.WriteAllText(report, "%PDF-1.4");
             var cases = new (string Name, WheelKind Wheel, string[] Files, int Hover)[]
             {
                 ("convertir-png", WheelKind.Convert, [@"C:\fotos\vacaciones.png"], 0),
                 ("herramientas-jpg", WheelKind.Tools, [@"C:\fotos\vacaciones.jpg"], 2),
                 ("convertir-pdf", WheelKind.Convert, [@"C:\docs\informe.pdf"], -1),
-                ("acciones", WheelKind.Actions, [@"C:\docs\informe.pdf"], 1),
+                ("acciones", WheelKind.Actions, [report], 1),
             };
             foreach (var c in cases)
             {
@@ -84,6 +93,7 @@ internal static class Bench
             }
             await SnapshotClipboard(folder, x, y);
             await SnapshotToasts(folder);
+            await SnapshotShelf(folder, x, y, [photo, report, Path.Combine(samples, "Fotos del viaje")]);
         }
         catch (Exception e)
         {
@@ -119,6 +129,23 @@ internal static class Bench
         Console.WriteLine(path);
         window.Close();
         try { Directory.Delete(dir, true); } catch (IOException) { }
+    }
+
+    private static async Task SnapshotShelf(string folder, int x, int y, string[] files)
+    {
+        var shelf = new Shelf.ShelfWindow();
+        var scale = Win32.ScaleAt(x, y);
+        shelf.PlaceAt(x / scale - 168, y / scale - 160);
+        shelf.Add(files);
+        await Task.Delay(500);
+        shelf.Opacity = 0;
+        await Task.Delay(80);
+        var under = Wheel.GlassCapture.Capture((int)(shelf.Left * scale), (int)(shelf.Top * scale), (int)(shelf.ActualWidth * scale), (int)(shelf.ActualHeight * scale), 1);
+        shelf.Opacity = 1;
+        var path = Path.Combine(folder, "estante.png");
+        shelf.SaveSnapshot(path, under);
+        Console.WriteLine(path);
+        shelf.Close();
     }
 
     private static async Task SnapshotToasts(string folder)

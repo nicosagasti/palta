@@ -16,15 +16,30 @@ public interface IOperation
 
     /// <summary>Ejecuta la operación y devuelve las rutas que produjo.</summary>
     Task<IReadOnlyList<string>> RunAsync(IReadOnlyList<string> files, IProgress<double> progress, CancellationToken ct);
+
+    /// <summary>
+    /// La operación muestra su propia interfaz (panel de compartir, estante, terminal):
+    /// no hace falta aviso salvo que falle.
+    /// </summary>
+    bool Quiet => false;
 }
 
-/// <summary>Lo que las acciones necesitan de la interfaz (selector de carpeta, portapapeles).</summary>
+/// <summary>Lo que las acciones necesitan de la interfaz (selector de carpeta, portapapeles, compartir…).</summary>
 public interface IShellHost
 {
     /// <summary>Null si el usuario cancela.</summary>
     string? PickFolder(string title);
 
     void SetClipboardText(string text);
+
+    /// <summary>Abre el panel de compartir de Windows con estos archivos (el equivalente a AirDrop).</summary>
+    void Share(IReadOnlyList<string> files);
+
+    /// <summary>Deja los archivos en el estante flotante, desde donde se los puede volver a arrastrar.</summary>
+    void Float(IReadOnlyList<string> files);
+
+    /// <summary>Abre una terminal en esa carpeta.</summary>
+    void OpenTerminal(string folder);
 }
 
 public sealed class Operation(
@@ -39,6 +54,7 @@ public sealed class Operation(
     public WheelKind Wheel => wheel;
     public string Label => label;
     public string Glyph => glyph;
+    public bool Quiet { get; init; }
 
     public bool AppliesTo(IReadOnlyList<string> files) => files.Count > 0 && appliesTo(files);
 

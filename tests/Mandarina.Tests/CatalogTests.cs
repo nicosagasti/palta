@@ -7,8 +7,72 @@ public sealed class FakeHost : IShellHost
 {
     public string? Folder;
     public string? Clipboard;
+    public IReadOnlyList<string>? Shared;
+    public IReadOnlyList<string>? Floated;
+    public string? TerminalAt;
     public string? PickFolder(string title) => Folder;
     public void SetClipboardText(string text) => Clipboard = text;
+    public void Share(IReadOnlyList<string> files) => Shared = files;
+    public void Float(IReadOnlyList<string> files) => Floated = files;
+    public void OpenTerminal(string folder) => TerminalAt = folder;
+}
+
+public class TangerineActionsTests
+{
+    [Fact]
+    public void Actions_SameAsTangerine_InOrder()
+    {
+        using var d = new TempDir();
+        var f = d.File("a.txt");
+        var ids = Catalog.CreateDefault(new FakeHost()).For(WheelKind.Actions, [f]).Select(o => o.Id);
+        Assert.Equal(["share", "float", "copy-to", "move-to", "copy-path", "terminal"], ids);
+    }
+
+    [Fact]
+    public async Task Share_And_Float_PassFilesToHost()
+    {
+        using var d = new TempDir();
+        string[] files = [d.File("a.png"), d.File("b.pdf")];
+        var host = new FakeHost();
+        var c = Catalog.CreateDefault(host);
+        await c.ById("share")!.RunAsync(files, new Progress<double>(), default);
+        await c.ById("float")!.RunAsync(files, new Progress<double>(), default);
+        Assert.Equal(files, host.Shared);
+        Assert.Equal(files, host.Floated);
+    }
+
+    [Fact]
+    public async Task Terminal_OpensInFolderOfFile_OrInFolderItself()
+    {
+        using var d = new TempDir();
+        var file = d.File("a.txt");
+        var sub = Path.Combine(d.Path, "sub");
+        Directory.CreateDirectory(sub);
+        var host = new FakeHost();
+        var op = Catalog.CreateDefault(host).ById("terminal")!;
+        await op.RunAsync([file], new Progress<double>(), default);
+        Assert.Equal(d.Path, host.TerminalAt);
+        await op.RunAsync([sub], new Progress<double>(), default);
+        Assert.Equal(sub, host.TerminalAt);
+    }
+
+    [Fact]
+    public void Quiet_OnlyForActionsThatShowTheirOwnUi()
+    {
+        var c = Catalog.CreateDefault(new FakeHost());
+        Assert.True(c.ById("share")!.Quiet);
+        Assert.True(c.ById("float")!.Quiet);
+        Assert.True(c.ById("terminal")!.Quiet);
+        Assert.False(c.ById("copy-path")!.Quiet);
+        Assert.False(c.ById("img-to-jpg")!.Quiet);
+    }
+
+    [Fact]
+    public void Share_NeedsExistingFiles()
+    {
+        var c = Catalog.CreateDefault(new FakeHost());
+        Assert.False(c.ById("share")!.AppliesTo([@"C:\no\existe.txt"]));
+    }
 }
 
 public class CatalogTests

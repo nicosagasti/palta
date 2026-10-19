@@ -111,6 +111,12 @@ internal static class Glass
 
     public static Color Tertiary(bool dark) => dark ? Color.FromArgb(0x5C, 0xEB, 0xEB, 0xF5) : Color.FromArgb(0x5C, 0x3C, 0x3C, 0x43);
 
+    /// <summary>Velo de una fila bajo el mouse.</summary>
+    public static Color RowHover(bool dark) => dark ? Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x10, 0, 0, 0);
+
+    /// <summary>Línea divisoria finita.</summary>
+    public static Color Hairline(bool dark) => dark ? Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x14, 0, 0, 0);
+
     public static Brush Frozen(Brush b)
     {
         b.Freeze();

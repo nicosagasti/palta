@@ -1,10 +1,21 @@
 namespace Mandarina.Core.Operations;
 
-/// <summary>Rueda Acciones: funcionan con cualquier archivo o carpeta.</summary>
+/// <summary>
+/// Rueda Acciones, las mismas de Tangerine en el mismo orden: Compartir (AirDrop), Flotar, Copiar,
+/// Mover, Copiar ruta y Terminal. Funcionan con cualquier archivo o carpeta.
+/// </summary>
 public static class ActionOperations
 {
     public static IEnumerable<IOperation> All(IShellHost host)
     {
+        yield return new Operation("share", WheelKind.Actions, "Compartir", "", Exists, (files, progress, _) => Done(progress, () => host.Share(files)))
+        {
+            Quiet = true,
+        };
+        yield return new Operation("float", WheelKind.Actions, "Flotar", "", Exists, (files, progress, _) => Done(progress, () => host.Float(files)))
+        {
+            Quiet = true,
+        };
         yield return new Operation("copy-to", WheelKind.Actions, "Copiar a…", "", Exists,
             (files, progress, ct) => Transfer(host, "Copiar a…", files, move: false, progress, ct));
         yield return new Operation("move-to", WheelKind.Actions, "Mover a…", "", Exists,
@@ -16,7 +27,22 @@ public static class ActionOperations
                 progress.Report(1);
                 return Task.FromResult<IReadOnlyList<string>>([]);
             });
+        yield return new Operation("terminal", WheelKind.Actions, "Terminal", "", Exists, (files, progress, _) => Done(progress, () => host.OpenTerminal(FolderOf(files[0]))))
+        {
+            Quiet = true,
+        };
     }
+
+    private static Task<IReadOnlyList<string>> Done(IProgress<double> progress, Action action)
+    {
+        action();
+        progress.Report(1);
+        return Task.FromResult<IReadOnlyList<string>>([]);
+    }
+
+    /// <summary>Una carpeta es su propia carpeta; un archivo, la que lo contiene.</summary>
+    private static string FolderOf(string path) =>
+        Directory.Exists(path) ? Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)) : Path.GetDirectoryName(Path.GetFullPath(path))!;
 
     private static bool Exists(IReadOnlyList<string> files) => files.All(f => File.Exists(f) || Directory.Exists(f));
 

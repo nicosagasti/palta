@@ -6,7 +6,7 @@ Clon personal de [Tangerine](https://tangerineformac.com/) para Windows 11. Arra
 |---|---|---|
 | **Shift** | Convertir | PNG ↔ JPG, WebP, AVIF, BMP, TIFF, ICO, PDF · PDF → PNG/JPG |
 | **Ctrl** | Herramientas | comprimir, 50 %, máx. 1920 px, rotar, quitar metadatos, unir en PDF · PDF: unir, separar, rotar |
-| **Alt** | Acciones | copiar a…, mover a…, copiar ruta |
+| **Alt** | Acciones | compartir, flotar (estante movible), copiar a…, mover a…, copiar ruta, terminal |
 
 - La rueda queda abierta aunque sueltes la tecla. Tocar otra tecla cambia de rueda; tocar **la misma** repite la última acción.
 - Soltar en el centro (o fuera) cancela. El original nunca se modifica: el resultado aparece al lado (`foto.jpg`, `foto (comprimida).jpg`, `foto (1).jpg`…).

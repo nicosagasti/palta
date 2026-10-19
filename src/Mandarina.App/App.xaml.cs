@@ -31,6 +31,7 @@ public partial class App : Application
     private ClipboardHistory? _clipHistory;
     private ClipboardWatcher? _clipWatcher;
     private ClipboardWindow? _clipWindow;
+    private Shelf.ShelfWindow? _shelf;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -56,10 +57,27 @@ public partial class App : Application
 
         var firstRun = !System.IO.File.Exists(AppSettings.DefaultPath);
         _settings = AppSettings.Load(AppSettings.DefaultPath);
-        _catalog = Catalog.CreateDefault(new ShellHost(Dispatcher));
+        _catalog = Catalog.CreateDefault(new ShellHost(Dispatcher, files => (_shelf ??= new Shelf.ShelfWindow()).Add(files)));
         _queue = new JobQueue(JobQueue.DefaultConcurrency);
         _toasts = new ToastStack();
-        _queue.JobAdded += job => Dispatcher.BeginInvoke(() => _toasts.Add(job));
+        _queue.JobAdded += job =>
+        {
+            if (!job.Operation.Quiet)
+            {
+                Dispatcher.BeginInvoke(() => _toasts.Add(job));
+                return;
+            }
+            // Compartir, Flotar y Terminal muestran su propia interfaz: aviso solo si fallan.
+            var shown = false;
+            job.Changed += j =>
+            {
+                if (j.State == JobState.Failed && !shown)
+                {
+                    shown = true;
+                    Dispatcher.BeginInvoke(() => _toasts.Add(j));
+                }
+            };
+        };
 
         _wheel = new WheelWindow(_catalog, () => _settings.LastOperationId);
         _wheel.OperationChosen += OnOperationChosen;

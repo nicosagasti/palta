@@ -191,6 +191,13 @@ internal static partial class Win32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool AttachConsole(int dwProcessId);
 
+    public const uint WDA_NONE = 0x0;
+    public const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
+
     /// <summary>Escala (DPI/96) del monitor que contiene el punto, en píxeles físicos.</summary>
     public static double ScaleAt(int x, int y)
     {

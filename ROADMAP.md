@@ -2,7 +2,7 @@
 
 Cosas acordadas pero todavía no hechas.
 
-- [ ] **Acciones iguales a las de Tangerine**: sumar Compartir, Flotar y Terminal.
+- [x] **Acciones iguales a las de Tangerine**: Compartir, Flotar y Terminal (hecho).
 - [ ] **Portapapeles flotante (picture in picture)**: que el historial pueda quedar como ventanita siempre visible y movible.
 - [ ] **Temas personalizables**: elegir y cambiar el aspecto desde Configuración.
 - [ ] **Convertir documentos**: DOCX, PDF, ODT, TXT y demás formatos de oficina.
@@ -16,12 +16,12 @@ La rueda **Acciones** de Tangerine tiene seis opciones: AirDrop, Float, Copy, Mo
 
 | Tangerine | Mandarina | Estado |
 |---|---|---|
-| AirDrop | **Compartir**: abre el panel de compartir de Windows (Compartir con dispositivos cercanos, Phone Link, mail, apps) | falta |
-| Float | **Flotar**: deja el archivo en una ventanita de vidrio siempre visible, que se puede mover y desde la que se lo vuelve a arrastrar a cualquier lado (un "estante") | falta |
+| AirDrop | **Compartir**: abre el panel de compartir de Windows (Compartir con dispositivos cercanos, Phone Link, mail, apps) | hecho |
+| Float | **Flotar**: deja el archivo en una ventanita de vidrio siempre visible, que se puede mover y desde la que se lo vuelve a arrastrar a cualquier lado (un "estante") | hecho |
 | Copy | **Copiar a…** | ya está |
 | Move | **Mover a…** | ya está |
 | Copy Path | **Copiar ruta** | ya está |
-| Terminal | **Terminal**: abre Windows Terminal (o PowerShell si no está) en la carpeta del archivo | falta |
+| Terminal | **Terminal**: abre Windows Terminal (o PowerShell si no está) en la carpeta del archivo | hecho |
 
 Notas:
 
