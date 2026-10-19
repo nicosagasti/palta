@@ -395,14 +395,11 @@ internal sealed class WheelWindow : Window
 
     // ---------- Dibujo ----------
 
-    /// <summary>Capas fijas del vidrio: sombra, fondo con vibrancia, tinte, brillo, filo y centro.</summary>
+    /// <summary>Capas fijas del vidrio: fondo con vibrancia, tinte, brillo, filo y centro (sin sombra alrededor, a pedido).</summary>
     private void BuildStatic()
     {
         Clear();
         var dark = Dark;
-
-        var shadow = new Ellipse { Width = (Outer + 34) * 2, Height = (Outer + 34) * 2, Fill = Glass.DiskShadow(dark) };
-        Place(shadow, C.X, C.Y + 12);
 
         var disk = new EllipseGeometry(C, Outer, Outer);
         disk.Freeze();
