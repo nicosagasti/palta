@@ -73,13 +73,24 @@ internal static class Glass
             new GradientStop(Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF), 0.38),
         ], new Point(0.5, 0), new Point(0.5, 1)));
 
-    /// <summary>Sombra amplia y difusa debajo de un disco.</summary>
-    public static Brush DiskShadow(bool dark) => Frozen(new RadialGradientBrush(
-        [
-            new GradientStop(Color.FromArgb((byte)(dark ? 0x80 : 0x38), 0, 0, 0), 0.72),
-            new GradientStop(Color.FromArgb((byte)(dark ? 0x30 : 0x14), 0, 0, 0), 0.86),
-            new GradientStop(Colors.Transparent, 1),
-        ]));
+    /// <summary>
+    /// Sombra difusa debajo de un disco. <paramref name="edge"/> es dónde está el borde del disco
+    /// (radio del disco / radio de la sombra). Desde ahí cae con una curva suave (smoothstep) que
+    /// llega a cero sin pendiente, para que el final no se vea como otra circunferencia.
+    /// </summary>
+    public static Brush DiskShadow(bool dark, double edge)
+    {
+        var alpha = dark ? 0x80 : 0x38;
+        var stops = new GradientStopCollection { new(Color.FromArgb((byte)alpha, 0, 0, 0), Math.Max(0, edge - 0.04)) };
+        const int steps = 10;
+        for (var i = 1; i <= steps; i++)
+        {
+            var t = i / (double)steps;
+            var fade = 1 - t * t * (3 - 2 * t);
+            stops.Add(new GradientStop(Color.FromArgb((byte)Math.Round(alpha * fade), 0, 0, 0), edge - 0.04 + (1 - edge + 0.04) * t));
+        }
+        return Frozen(new RadialGradientBrush(stops));
+    }
 
     /// <summary>
     /// Sombra suave para un rectángulo redondeado, hecha con capas de borde muy tenues

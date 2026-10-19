@@ -27,7 +27,7 @@ Antes de publicar cerrá Mandarina (`Stop-Process -Name Mandarina` o Salir en la
 ## Reglas
 
 - Toda interfaz sigue `.claude/skills/mandarina-glass/SKILL.md`. Colores solo de `Glass.*` / `Palette`.
-- **No cambiar la estética de la rueda** (vidrio oscuro): al usuario le encanta. La rueda va **sin halo** (sin la sombra `DiskShadow` alrededor), pero conserva el borde de luz: lo eligió el usuario.
+- **No cambiar la estética de la rueda** (vidrio oscuro): al usuario le encanta. Le gustan la sombra y el borde de luz, pero no la "segunda circunferencia" que dejaba el final de la sombra: `Glass.DiskShadow` cae con smoothstep para que no haya un corte visible.
 - Los avisos tienen el estilo de notificación de macOS Tahoe: no volver a cápsulas ni diseños tipo iOS viejo.
 - Textos de la UI en castellano rioplatense, cortos.
 - Todas las ventanas son de herramienta (`WS_EX_TOOLWINDOW`) para no aparecer en Alt+Tab, salvo Configuración mientras está abierta.
