@@ -48,9 +48,18 @@ internal static class ShareSheet
             ShowActivated = true,
             Topmost = true,
         };
+        // Ventana de herramienta: no aparece en Alt+Tab ni en la barra de tareas.
+        anchor.SourceInitialized += (_, _) => Win32.AddExStyle(new WindowInteropHelper(anchor).Handle, Win32.WS_EX_TOOLWINDOW);
         anchor.Show();
         _anchor = anchor;
         var hwnd = new WindowInteropHelper(anchor).Handle;
+        // Se cierra sola: al elegir destino o, si cancelan el panel, en un rato.
+        var cleanup = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMinutes(2), System.Windows.Threading.DispatcherPriority.Background, (s, _) =>
+        {
+            ((System.Windows.Threading.DispatcherTimer)s!).Stop();
+            CloseAnchor(anchor);
+        }, anchor.Dispatcher);
+        cleanup.Start();
         // El panel solo se abre para la ventana que está al frente. Después de un drop la app no tiene
         // el foco y Windows bloquea SetForegroundWindow; un toque de Alt sintético lo habilita.
         const byte VK_MENU = 0x12;
@@ -89,6 +98,15 @@ internal static class ShareSheet
                 deferral.Complete();
             }
         };
+        manager.TargetApplicationChosen += (_, _) => anchor.Dispatcher.BeginInvoke(() => CloseAnchor(anchor));
         interop.ShowShareUIForWindow(hwnd);
+    }
+
+    private static void CloseAnchor(Window anchor)
+    {
+        if (_anchor == anchor)
+            _anchor = null;
+        if (anchor.IsLoaded)
+            anchor.Close();
     }
 }

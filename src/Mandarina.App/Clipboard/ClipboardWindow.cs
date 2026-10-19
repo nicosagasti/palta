@@ -81,7 +81,12 @@ internal sealed class ClipboardWindow : Window
         _search.TextChanged += (_, _) => _placeholder.Visibility = _search.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         PreviewKeyDown += OnKey;
         Deactivated += (_, _) => { if (IsVisible && !_dragging) Close2(); };
-        SourceInitialized += (_, _) => _hwnd = new WindowInteropHelper(this).Handle;
+        SourceInitialized += (_, _) =>
+        {
+            _hwnd = new WindowInteropHelper(this).Handle;
+            // Ventana de herramienta: no aparece en Alt+Tab ni en la barra de tareas.
+            Win32.AddExStyle(_hwnd, Win32.WS_EX_TOOLWINDOW);
+        };
         history.Changed += () => Dispatcher.BeginInvoke(() => { if (IsVisible) Refresh(); });
     }
 
