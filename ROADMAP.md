@@ -7,6 +7,7 @@ Cosas acordadas pero todavía no hechas.
 - [ ] **Temas personalizables**: elegir y cambiar el aspecto desde Configuración.
 - [ ] **Convertir documentos**: DOCX, PDF, ODT, TXT y demás formatos de oficina.
 - [ ] **Comprimir y descomprimir**: carpetas y archivos a ZIP, y extraer ZIP, RAR, 7Z y TAR.
+- [ ] **Acciones sobre texto seleccionado**: seleccionar un texto o un párrafo en cualquier app y abrir una rueda con cosas para hacer con él.
 - [ ] Video y audio (MP4, MP3, etc.).
 - [ ] Preferencias de accesibilidad de Windows (transparencia, animaciones, contraste alto).
 - [ ] Detalles menores de la revisión de código.
@@ -79,6 +80,21 @@ Que la rueda ofrezca **Comprimir en ZIP** al soltar una carpeta (o varios archiv
 - **Comprimir:** `Carpeta` → `Carpeta.zip` al lado, sin pisar nada (`OutputPaths` + `SafeWrite`). Varios archivos sueltos → un solo `Archivo.zip`. Con progreso en el aviso.
 - **Descomprimir:** ZIP con .NET. RAR, 7Z, TAR y GZ con el `tar.exe` que trae Windows 11 (usa libarchive, así que también lee RAR), sin instalar nada. Se extrae a una carpeta con el nombre del archivo, sin pisar nada, y protegido contra rutas que se escapan de la carpeta (`..\`).
 - Encaja igual que el resto: una `ArchiveOperations` en `src/Mandarina.Core/Operations/` y `FileKind.Archive` en `Formats.KindOf`. La rueda, la cola y los avisos no cambian.
+
+## Acciones sobre texto seleccionado
+
+Que la rueda no sirva solo para archivos: si seleccionás un texto o un párrafo en cualquier app, un atajo (o arrastrar la selección y tocar una tecla, como con los archivos) abre una rueda con acciones para ese texto.
+
+- **Formato**: MAYÚSCULAS, minúsculas, Tipo Título, quitar saltos de línea y espacios de más, texto plano sin formato.
+- **Usar**: buscar en la web, abrir si es un link, contar palabras y caracteres, copiar limpio, guardar como `.txt` en el escritorio.
+- **Mandarlo a otro lado**: Compartir, Flotar en el estante y fijarlo en el historial del portapapeles.
+- **Más adelante**: traducir, resumir o corregir (con IA, opcional y configurable).
+
+Cómo encaja:
+
+- Para leer la selección se simula Ctrl+C, se toma el texto del portapapeles y después se restaura lo que había, sin ensuciar el historial. Para arrastrar texto, la rueda tendría que aceptar también `CF_UNICODETEXT` en el drop, no solo archivos.
+- Las acciones que cambian el texto lo pegan de vuelta en su lugar (Ctrl+V) o lo dejan copiado.
+- Operaciones nuevas en `src/Mandarina.Core/Operations/` que reciben texto en vez de rutas. La rueda y la estética no cambian.
 
 ## Otras pendientes
 
