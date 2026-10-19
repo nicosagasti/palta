@@ -2,11 +2,43 @@
 
 Cosas acordadas pero todavía no hechas.
 
+- [ ] **Acciones iguales a las de Tangerine**: sumar Compartir, Flotar y Terminal.
+- [ ] **Portapapeles flotante (picture in picture)**: que el historial pueda quedar como ventanita siempre visible y movible.
 - [ ] **Temas personalizables**: elegir y cambiar el aspecto desde Configuración.
 - [ ] **Convertir documentos**: DOCX, PDF, ODT, TXT y demás formatos de oficina.
 - [ ] Video y audio (MP4, MP3, etc.).
 - [ ] Preferencias de accesibilidad de Windows (transparencia, animaciones, contraste alto).
 - [ ] Detalles menores de la revisión de código.
+
+## Acciones iguales a las de Tangerine
+
+La rueda **Acciones** de Tangerine tiene seis opciones: AirDrop, Float, Copy, Move, Copy Path y Terminal. En Windows quedarían así:
+
+| Tangerine | Mandarina | Estado |
+|---|---|---|
+| AirDrop | **Compartir**: abre el panel de compartir de Windows (Compartir con dispositivos cercanos, Phone Link, mail, apps) | falta |
+| Float | **Flotar**: deja el archivo en una ventanita de vidrio siempre visible, que se puede mover y desde la que se lo vuelve a arrastrar a cualquier lado (un "estante") | falta |
+| Copy | **Copiar a…** | ya está |
+| Move | **Mover a…** | ya está |
+| Copy Path | **Copiar ruta** | ya está |
+| Terminal | **Terminal**: abre Windows Terminal (o PowerShell si no está) en la carpeta del archivo | falta |
+
+Notas:
+
+- Compartir usa la API de Windows (`DataTransferManager` con `IDataTransferManagerInterop`), así que no hace falta instalar nada.
+- Flotar y el portapapeles flotante pueden ser la **misma ventanita**: un estante que guarda archivos (y, en el caso del portapapeles, también textos e imágenes).
+- Todas tienen que funcionar con carpetas, con selecciones mezcladas y con archivos que no tienen conversiones, igual que en Tangerine.
+
+## Portapapeles flotante (picture in picture)
+
+Que el historial del portapapeles, además de abrirse con Ctrl+Alt+V y cerrarse al elegir algo, se pueda **dejar flotando** como una ventanita tipo picture in picture.
+
+- Un botón (por ejemplo, un ícono de chinche) en el panel lo convierte en ventanita: más chica, siempre encima de las demás ventanas, y que no se cierra al hacer clic afuera.
+- Se mueve arrastrándola desde cualquier parte vacía y se queda donde la dejaste; la próxima vez aparece en el mismo lugar (guardado en `settings.json`).
+- Imanes en los bordes y esquinas de la pantalla, como el picture in picture de macOS.
+- Lo copiado nuevo aparece en vivo arriba de la lista. Se puede arrastrar cualquier elemento hacia otra app, o hacer clic para pegarlo.
+- Un botón para volver al modo normal o cerrarla.
+- Mismo vidrio que el resto: seguir `.claude/skills/mandarina-glass/SKILL.md`. El fondo de vidrio se vuelve a capturar al moverla, no en cada cuadro.
 
 ## Temas personalizables
 
