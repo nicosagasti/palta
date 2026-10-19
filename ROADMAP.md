@@ -6,6 +6,7 @@ Cosas acordadas pero todavía no hechas.
 - [ ] **Portapapeles flotante (picture in picture)**: que el historial pueda quedar como ventanita siempre visible y movible.
 - [ ] **Temas personalizables**: elegir y cambiar el aspecto desde Configuración.
 - [ ] **Convertir documentos**: DOCX, PDF, ODT, TXT y demás formatos de oficina.
+- [ ] **Comprimir y descomprimir**: carpetas y archivos a ZIP, y extraer ZIP, RAR, 7Z y TAR.
 - [ ] Video y audio (MP4, MP3, etc.).
 - [ ] Preferencias de accesibilidad de Windows (transparencia, animaciones, contraste alto).
 - [ ] Detalles menores de la revisión de código.
@@ -68,6 +69,16 @@ Cómo encaja con lo que ya existe:
 - Hay que agregar los tipos nuevos en `Formats.KindOf` (por ejemplo, `FileKind.Document`).
 - El motor más completo para esto es **LibreOffice** en modo sin ventana (`soffice --headless --convert-to`), que habría que instalar aparte. **Pandoc** sirve para los formatos de texto (Markdown, HTML, DOCX), y PDF → DOCX necesita una librería propia o LibreOffice.
 - Si falta el programa necesario, la opción aparece igual en la rueda y, al elegirla, se explica qué instalar en vez de fallar en silencio.
+
+## Comprimir y descomprimir
+
+Que la rueda ofrezca **Comprimir en ZIP** al soltar una carpeta (o varios archivos), y **Descomprimir** al soltar un archivo comprimido.
+
+- **Formato: ZIP.** Es el más portable: se abre sin instalar nada en Windows, macOS, Linux, iOS y Android. RAR es un formato cerrado: solo WinRAR puede crearlo y no hay forma libre de generarlo desde la app.
+- **Rapidez:** ZIP con el nivel `Fastest` (o `Optimal` como opción) de `System.IO.Compression`, que ya viene en .NET: no suma dependencias y es rapidísimo. Las fotos, videos y PDF ya vienen comprimidos, así que guardarlos sin recomprimir ahorra mucho tiempo.
+- **Comprimir:** `Carpeta` → `Carpeta.zip` al lado, sin pisar nada (`OutputPaths` + `SafeWrite`). Varios archivos sueltos → un solo `Archivo.zip`. Con progreso en el aviso.
+- **Descomprimir:** ZIP con .NET. RAR, 7Z, TAR y GZ con el `tar.exe` que trae Windows 11 (usa libarchive, así que también lee RAR), sin instalar nada. Se extrae a una carpeta con el nombre del archivo, sin pisar nada, y protegido contra rutas que se escapan de la carpeta (`..\`).
+- Encaja igual que el resto: una `ArchiveOperations` en `src/Mandarina.Core/Operations/` y `FileKind.Archive` en `Formats.KindOf`. La rueda, la cola y los avisos no cambian.
 
 ## Otras pendientes
 
