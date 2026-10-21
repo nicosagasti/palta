@@ -113,6 +113,7 @@ public sealed class JobQueue(int concurrency)
     private static string UserMessage(Exception e) => e switch
     {
         Backends.ConversionException => e.Message,
+        ImageMagick.MagickCorruptImageErrorException => "La imagen está dañada o incompleta.",
         ImageMagick.MagickException => $"No se pudo leer la imagen: {FirstLine(e.Message)}",
         UnauthorizedAccessException => "Sin permiso para escribir en esa carpeta.",
         _ => FirstLine(e.Message),

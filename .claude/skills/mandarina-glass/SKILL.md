@@ -60,7 +60,7 @@ En iOS la regla es "cada toque, un háptico". En una PC no hay hápticos: el equ
 2. **Presión / soltar**: confirma la acción (la gota que viaja al sector, el aviso que aparece). Nunca cerrar en silencio.
 3. **Cancelar** también responde: el centro de la rueda se tiñe con `Danger` al pasar por encima.
 4. **Teclado**: todo lo que se hace con el mouse se puede hacer con teclado (flechas, Enter, Esc, Tab, 1–9). Un control nuevo sin camino de teclado es un bug.
-5. **Errores**: tarjeta con insignia `Danger`, mensaje en castellano claro, queda hasta que la cierren.
+5. **Errores**: tarjeta con insignia `Danger`, mensaje en castellano claro. Se cierra sola como las notificaciones de Windows, pero más tarde que un aviso de éxito (8 s contra 5 s), y no se cierra mientras el mouse está encima.
 
 No agregues sonidos: Windows no los usa para esto y molestan.
 

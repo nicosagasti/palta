@@ -149,7 +149,7 @@ internal sealed class JobToast : Window
         MouseLeave += (_, _) =>
         {
             Hover(false);
-            if (_job.State == JobState.Done)
+            if (_job.State is JobState.Done or JobState.Failed)
                 _autoClose.Start();
         };
 
@@ -244,6 +244,10 @@ internal sealed class JobToast : Window
                 _title.Text = job.Operation.Wheel == WheelKind.Convert ? $"No se pudo convertir a {job.Operation.Label}" : $"No se pudo: {job.Operation.Label}";
                 _body.Text = job.Error ?? "Error desconocido";
                 _body.ToolTip = job.Error;
+                // Como las notificaciones de Windows, también se va sola, pero da más tiempo para leerlo.
+                _autoClose.Interval = TimeSpan.FromSeconds(8);
+                if (!IsMouseOver)
+                    _autoClose.Start();
                 ShowSymbol("", _palette.Danger);
                 SetActions();
                 break;
