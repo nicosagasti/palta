@@ -192,7 +192,8 @@ internal static class Bench
             t.Opacity = 1;
             var path = Path.Combine(folder, $"aviso-{i + 1}.png");
             t.SaveSnapshot(path, under);
-            Console.WriteLine(path);
+            Win32.GetWindowRect(new System.Windows.Interop.WindowInteropHelper(t).Handle, out var rect);
+            Console.WriteLine($"{path}  ventana en ({rect.Left}, {rect.Top})-({rect.Right}, {rect.Bottom})");
         }
         gate.SetResult();
         foreach (var t in toasts)

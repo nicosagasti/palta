@@ -368,25 +368,40 @@ internal sealed class JobToast : Window
         catch (Exception e) { Core.Log.Error($"Mostrar {path}", e); }
     }
 
-    /// <summary>Entra deslizándose desde la derecha con un resorte suave, como en macOS.</summary>
-    public void ShowAt(double left, double top)
+    private Vector _leaveTo = new(1, 0);
+
+    /// <summary>Entra deslizándose desde <paramref name="enterFrom"/> con un resorte suave, como en macOS.</summary>
+    /// <param name="left">Posición en unidades del monitor de destino (píxeles / <paramref name="scale"/>).</param>
+    /// <param name="scale">Escala del monitor de destino.</param>
+    public void ShowAt(double left, double top, double scale, Vector enterFrom, Vector leaveTo)
     {
+        _leaveTo = leaveTo;
+        // Con monitores de escalas distintas, WPF convierte Left/Top con la escala del monitor donde
+        // está la ventana, no con la del destino. Primero se la lleva en píxeles reales al monitor de
+        // destino (Windows le ajusta el tamaño a esa escala) y recién ahí se fija Left/Top.
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle();
+        const uint flags = 0x0001 /* SWP_NOSIZE */ | 0x0004 /* SWP_NOZORDER */ | 0x0010 /* SWP_NOACTIVATE */;
+        Win32.SetWindowPos(hwnd, IntPtr.Zero, (int)Math.Round(left * scale), (int)Math.Round(top * scale), 0, 0, flags);
         Left = left;
         Top = top;
         // El vidrio toma lo que hay detrás una vez, en píxeles físicos.
-        var scale = Win32.ScaleAt((int)left, (int)top);
         var (x, y) = ((int)((left + ShadowMargin) * scale), (int)((top + ShadowMargin) * scale));
         _glass.Source = GlassCapture.Capture(x, y, (int)(CardWidth * scale), (int)(CardHeight * scale)) is { } shot ? Glass.Vibrant(shot, Dark) : null;
         Opacity = 0;
         Show();
         BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(180)));
-        _slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(CardWidth * 0.35, 0, TimeSpan.FromMilliseconds(380)) { EasingFunction = new BackEase { Amplitude = 0.18, EasingMode = EasingMode.EaseOut } });
+        var spring = new BackEase { Amplitude = 0.18, EasingMode = EasingMode.EaseOut };
+        var enter = TimeSpan.FromMilliseconds(380);
+        if (enterFrom.X != 0)
+            _slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(enterFrom.X * CardWidth * 0.35, 0, enter) { EasingFunction = spring });
+        if (enterFrom.Y != 0)
+            _slide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(enterFrom.Y * CardHeight * 0.6, 0, enter) { EasingFunction = spring });
     }
 
     public void MoveTo(double top) =>
         BeginAnimation(TopProperty, new DoubleAnimation(top, TimeSpan.FromMilliseconds(240)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
 
-    /// <summary>Se va hacia la derecha, más rápido de lo que entró.</summary>
+    /// <summary>Se va hacia el borde de la pantalla, más rápido de lo que entró.</summary>
     public void FadeOut()
     {
         if (_closing)
@@ -401,7 +416,11 @@ internal sealed class JobToast : Window
             Close();
             Gone?.Invoke(this);
         };
-        _slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(CardWidth * 0.4, duration) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn } });
+        var ease = new QuadraticEase { EasingMode = EasingMode.EaseIn };
+        if (_leaveTo.X != 0)
+            _slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(_leaveTo.X * CardWidth * 0.4, duration) { EasingFunction = ease });
+        if (_leaveTo.Y != 0)
+            _slide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(_leaveTo.Y * CardHeight * 0.6, duration) { EasingFunction = ease });
         BeginAnimation(OpacityProperty, fade);
     }
 
@@ -427,12 +446,17 @@ internal sealed class JobToast : Window
     }
 }
 
-/// <summary>Apila los avisos arriba a la derecha, el más nuevo arriba, como el centro de notificaciones de macOS.</summary>
+/// <summary>
+/// Apila los avisos en la esquina donde aparecen las notificaciones de Windows (ver <see cref="ToastPlacement"/>),
+/// el más nuevo pegado al borde, como el centro de notificaciones de macOS.
+/// </summary>
 internal sealed class ToastStack
 {
     private const double Gap = 8;
     private const double Edge = 12;
     private readonly List<JobToast> _toasts = [];
+    private ToastPlacement _placement = ToastPlacement.Default;
+    private Rect _area;
 
     public JobToast Add(Job job)
     {
@@ -443,8 +467,10 @@ internal sealed class ToastStack
             Relayout();
         };
         _toasts.Insert(0, toast);
-        var area = SystemParameters.WorkArea;
-        toast.ShowAt(area.Right - JobToast.CardWidth - Edge - JobToast.ShadowMargin, TopFor(0));
+        _placement = ToastPlacement.Current();
+        var (px, scale) = _placement.Screen();
+        _area = new Rect(px.Left / scale, px.Top / scale, px.Width / scale, px.Height / scale);
+        toast.ShowAt(LeftFor(), TopFor(0), scale, _placement.EnterFrom(), _placement.LeaveTo());
         Relayout();
         // Más de 4 visibles es ruido: las más viejas terminadas se van.
         foreach (var old in _toasts.Skip(4).Where(t => t.Finished).ToList())
@@ -452,8 +478,24 @@ internal sealed class ToastStack
         return toast;
     }
 
-    private static double TopFor(int index) =>
-        SystemParameters.WorkArea.Top + Edge - JobToast.ShadowMargin + (JobToast.CardHeight + Gap) * index;
+    private double LeftFor() => _placement.Horizontal switch
+    {
+        "left" => _area.Left + Edge + _placement.HorizontalDistance,
+        "center" => _area.Left + (_area.Width - JobToast.CardWidth) / 2,
+        _ => _area.Right - JobToast.CardWidth - Edge - _placement.HorizontalDistance,
+    } - JobToast.ShadowMargin;
+
+    /// <summary>Abajo, la pila crece hacia arriba; arriba o al centro, hacia abajo.</summary>
+    private double TopFor(int index)
+    {
+        var step = (JobToast.CardHeight + Gap) * index;
+        return _placement.Vertical switch
+        {
+            "bottom" => _area.Bottom - Edge - _placement.VerticalDistance - JobToast.CardHeight - step,
+            "center" => _area.Top + (_area.Height - JobToast.CardHeight) / 2 + step,
+            _ => _area.Top + Edge + _placement.VerticalDistance + step,
+        } - JobToast.ShadowMargin;
+    }
 
     private void Relayout()
     {
