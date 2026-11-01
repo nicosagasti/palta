@@ -6,10 +6,33 @@ namespace Palta.App.Theme;
 /// <summary>Colores derivados del modo claro/oscuro y del color de acento de Windows.</summary>
 internal sealed record Palette(bool Dark, Color Text, Color SubText, Color Tint, Color CenterTint, Color Accent, Color Danger)
 {
+    /// <summary>El verde palta: el acento cuando Windows no tiene uno y el usuario no eligió otro.</summary>
+    public static readonly Color PaltaGreen = Color.FromRgb(0x7C, 0xB3, 0x42);
+
+    /// <summary>Acento elegido en Configuración; null = el de Windows.</summary>
+    public static Color? CustomAccent { get; set; }
+
+    /// <summary>"#RRGGBB" → color; vacío o inválido → null (el de Windows).</summary>
+    public static Color? ParseAccent(string? hex)
+    {
+        if (hex is not { Length: 7 } || hex[0] != '#' || !uint.TryParse(hex.AsSpan(1), System.Globalization.NumberStyles.HexNumber, null, out var v))
+            return null;
+        return Color.FromRgb((byte)(v >> 16), (byte)(v >> 8), (byte)v);
+    }
+
     public static Palette Current()
     {
+        if (Accessibility.HighContrast)
+        {
+            // Contraste alto: los colores del sistema y nada más. Oscuro o claro según el fondo elegido.
+            var window = System.Windows.SystemColors.WindowColor;
+            var text = System.Windows.SystemColors.WindowTextColor;
+            var highlight = System.Windows.SystemColors.HighlightColor;
+            var darkBg = 0.2126 * window.R + 0.7152 * window.G + 0.0722 * window.B < 128;
+            return new Palette(darkBg, text, text, window, System.Windows.SystemColors.ControlColor, highlight, highlight);
+        }
         var dark = IsDark();
-        var accent = AccentColor() ?? Color.FromRgb(0x7C, 0xB3, 0x42);
+        var accent = CustomAccent ?? WindowsAccent() ?? PaltaGreen;
         return dark
             ? new Palette(true, Color.FromArgb(0xF5, 0xFF, 0xFF, 0xFF), Color.FromArgb(0xA8, 0xFF, 0xFF, 0xFF),
                 Color.FromArgb(0x3C, 0x14, 0x14, 0x1A), Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF), accent, Color.FromRgb(0xFF, 0x6B, 0x6B))
@@ -22,6 +45,8 @@ internal sealed record Palette(bool Dark, Color Text, Color SubText, Color Tint,
     {
         get
         {
+            if (Accessibility.HighContrast)
+                return Accent;
             static byte Mix(byte a, byte b) => (byte)(a + (b - a) * 0.3);
             return Color.FromArgb((byte)(Dark ? 0x46 : 0x8C), Mix(0xFF, Accent.R), Mix(0xFF, Accent.G), Mix(0xFF, Accent.B));
         }
@@ -36,14 +61,14 @@ internal sealed record Palette(bool Dark, Color Text, Color SubText, Color Tint,
             case "dark": return true;
         }
         // El tema Windows de Palta es siempre oscuro; Liquid glass sigue al claro/oscuro de Windows.
-        if (!Look.Translucent)
+        if (!Look.IsGlass)
             return true;
         using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
         return key?.GetValue("AppsUseLightTheme") is int light && light == 0;
     }
 
     /// <summary>HKCU\...\DWM\AccentColor está en formato ABGR.</summary>
-    private static Color? AccentColor()
+    public static Color? WindowsAccent()
     {
         using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\DWM");
         if (key?.GetValue("AccentColor") is not int abgr)

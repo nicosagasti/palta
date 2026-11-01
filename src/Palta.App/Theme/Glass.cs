@@ -42,23 +42,38 @@ internal static class Glass
 
     private static byte Clamp(double v) => (byte)Math.Clamp(v, 0, 255);
 
-    // En el tema Windows (Look.Translucent == false) las mismas piezas dan el material de Windows 11:
+    // En el tema Windows (Look.IsGlass == false) las mismas piezas dan el material de Windows 11:
     // superficie opaca como los menús y paneles flotantes, borde finito y nada de brillo.
 
-    /// <summary>Tinte del vidrio: claro y lechoso en tema claro, ahumado en tema oscuro. En Windows, la superficie opaca.</summary>
-    public static Color Tint(bool dark) => !Look.Translucent
-        ? (dark ? Color.FromRgb(0x2C, 0x2C, 0x2C) : Color.FromRgb(0xF9, 0xF9, 0xF9))
-        : dark ? Color.FromArgb(0x8C, 0x1E, 0x1E, 0x23) : Color.FromArgb(0xC4, 0xF5, 0xF5, 0xF7);
+    // En contraste alto (Accessibility.HighContrast) no hay vidrio ni grises propios: todo sale de los
+    // colores del sistema (SystemColors), que el usuario eligió para poder leer.
+    private static bool Contrast => Accessibility.HighContrast;
+
+    /// <summary>
+    /// Tinte del vidrio: claro y lechoso en tema claro, ahumado en tema oscuro. Sin efectos de transparencia,
+    /// casi opaco (no hay fondo capturado debajo). En Windows, la superficie opaca.
+    /// </summary>
+    public static Color Tint(bool dark)
+    {
+        if (Contrast)
+            return SystemColors.WindowColor;
+        if (!Look.IsGlass)
+            return dark ? Color.FromRgb(0x2C, 0x2C, 0x2C) : Color.FromRgb(0xF9, 0xF9, 0xF9);
+        var alpha = (byte)(Look.Translucent ? (dark ? 0x8C : 0xC4) : 0xF0);
+        return dark ? Color.FromArgb(alpha, 0x1E, 0x1E, 0x23) : Color.FromArgb(alpha, 0xF5, 0xF5, 0xF7);
+    }
 
     /// <summary>Tinte un poco más denso para chips y cápsulas que van encima del vidrio (en Windows, el relleno de los controles).</summary>
-    public static Color Chip(bool dark) => !Look.Translucent
+    public static Color Chip(bool dark) => Contrast ? SystemColors.ControlColor : !Look.IsGlass
         ? (dark ? Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x0A, 0, 0, 0))
         : dark ? Color.FromArgb(0x2E, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0xB8, 0xFF, 0xFF, 0xFF);
 
     /// <summary>Filo de luz: brillante arriba, casi nada a los costados, un rebote suave abajo. En Windows, un borde parejo y tenue.</summary>
     public static Brush Rim(bool dark)
     {
-        if (!Look.Translucent)
+        if (Contrast)
+            return SystemColors.WindowTextBrush;
+        if (!Look.IsGlass)
             return Frozen(new SolidColorBrush(dark ? Color.FromArgb(0x17, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x0F, 0, 0, 0)));
         var top = (byte)(dark ? 0x8C : 0xF0);
         var side = (byte)(dark ? 0x1A : 0x55);
@@ -73,10 +88,10 @@ internal static class Glass
     }
 
     /// <summary>Línea finísima oscura por fuera del filo: le da definición sobre fondos claros.</summary>
-    public static Brush Outline(bool dark) => Frozen(new SolidColorBrush(dark ? Color.FromArgb(0x66, 0, 0, 0) : Color.FromArgb(0x1C, 0, 0, 0)));
+    public static Brush Outline(bool dark) => Contrast ? SystemColors.WindowTextBrush : Frozen(new SolidColorBrush(dark ? Color.FromArgb(0x66, 0, 0, 0) : Color.FromArgb(0x1C, 0, 0, 0)));
 
     /// <summary>Brillo especular: una luz que entra desde arriba y se apaga antes de la mitad. En Windows no hay.</summary>
-    public static Brush Specular(bool dark) => !Look.Translucent ? Brushes.Transparent : Frozen(new LinearGradientBrush(
+    public static Brush Specular(bool dark) => !Look.IsGlass ? Brushes.Transparent : Frozen(new LinearGradientBrush(
         [
             new GradientStop(Color.FromArgb((byte)(dark ? 0x26 : 0x70), 0xFF, 0xFF, 0xFF), 0),
             new GradientStop(Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF), 0.38),
@@ -125,17 +140,18 @@ internal static class Glass
     }
 
     /// <summary>Texto principal y secundario: casi negro / gris en claro, blanco / gris claro en oscuro.</summary>
-    public static Color Text(bool dark) => dark ? Color.FromArgb(0xF2, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0xE8, 0x1D, 0x1D, 0x1F);
+    public static Color Text(bool dark) => Contrast ? SystemColors.WindowTextColor : dark ? Color.FromArgb(0xF2, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0xE8, 0x1D, 0x1D, 0x1F);
 
-    public static Color Secondary(bool dark) => dark ? Color.FromArgb(0x99, 0xEB, 0xEB, 0xF5) : Color.FromArgb(0x99, 0x3C, 0x3C, 0x43);
+    /// <summary>En contraste alto el secundario también es el color del texto: los grises propios no se leen.</summary>
+    public static Color Secondary(bool dark) => Contrast ? SystemColors.WindowTextColor : dark ? Color.FromArgb(0x99, 0xEB, 0xEB, 0xF5) : Color.FromArgb(0x99, 0x3C, 0x3C, 0x43);
 
-    public static Color Tertiary(bool dark) => dark ? Color.FromArgb(0x5C, 0xEB, 0xEB, 0xF5) : Color.FromArgb(0x5C, 0x3C, 0x3C, 0x43);
+    public static Color Tertiary(bool dark) => Contrast ? SystemColors.GrayTextColor : dark ? Color.FromArgb(0x5C, 0xEB, 0xEB, 0xF5) : Color.FromArgb(0x5C, 0x3C, 0x3C, 0x43);
 
     /// <summary>Velo de una fila bajo el mouse.</summary>
-    public static Color RowHover(bool dark) => dark ? Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x10, 0, 0, 0);
+    public static Color RowHover(bool dark) => Contrast ? SystemColors.HighlightColor : dark ? Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x10, 0, 0, 0);
 
     /// <summary>Línea divisoria finita.</summary>
-    public static Color Hairline(bool dark) => dark ? Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x14, 0, 0, 0);
+    public static Color Hairline(bool dark) => Contrast ? SystemColors.WindowTextColor : dark ? Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x14, 0, 0, 0);
 
     public static Brush Frozen(Brush b)
     {

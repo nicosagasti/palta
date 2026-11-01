@@ -367,28 +367,28 @@ internal sealed class WheelWindow : Window
         var (x, y) = _ops.Count == 1 ? (0.0, -LabelRadius) : WheelGeometry.SectorCenter(index, _ops.Count, LabelRadius);
         var spring = new BackEase { Amplitude = 0.28, EasingMode = EasingMode.EaseOut };
         var duration = TimeSpan.FromMilliseconds(appear ? 0 : 210);
-        _dropMove.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x, duration) { EasingFunction = spring });
-        _dropMove.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(y, duration) { EasingFunction = spring });
-        _drop.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(110)));
+        _dropMove.Animate(TranslateTransform.XProperty, new DoubleAnimation(x, duration) { EasingFunction = spring });
+        _dropMove.Animate(TranslateTransform.YProperty, new DoubleAnimation(y, duration) { EasingFunction = spring });
+        _drop.Animate(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(110)));
         var grow = new DoubleAnimation(1, TimeSpan.FromMilliseconds(appear ? 180 : 120)) { EasingFunction = spring };
-        _dropScale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
-        _dropScale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        _dropScale.Animate(ScaleTransform.ScaleXProperty, grow);
+        _dropScale.Animate(ScaleTransform.ScaleYProperty, grow);
     }
 
     private void HideDrop()
     {
-        _drop.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(120)));
+        _drop.Animate(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(120)));
         var shrink = new DoubleAnimation(0.8, TimeSpan.FromMilliseconds(120));
-        _dropScale.BeginAnimation(ScaleTransform.ScaleXProperty, shrink);
-        _dropScale.BeginAnimation(ScaleTransform.ScaleYProperty, shrink);
+        _dropScale.Animate(ScaleTransform.ScaleXProperty, shrink);
+        _dropScale.Animate(ScaleTransform.ScaleYProperty, shrink);
     }
 
     private static void Emphasize(FrameworkElement content, bool on)
     {
         var s = (ScaleTransform)content.RenderTransform;
         var anim = new DoubleAnimation(on ? 1.07 : 1, TimeSpan.FromMilliseconds(140)) { EasingFunction = new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut } };
-        s.BeginAnimation(ScaleTransform.ScaleXProperty, anim);
-        s.BeginAnimation(ScaleTransform.ScaleYProperty, anim);
+        s.Animate(ScaleTransform.ScaleXProperty, anim);
+        s.Animate(ScaleTransform.ScaleYProperty, anim);
         if (content.Tag is TextBlock label)
             label.Opacity = on ? 1 : 0.72;
     }
@@ -448,7 +448,7 @@ internal sealed class WheelWindow : Window
         Place(_centerGlyph, C.X, C.Y);
 
         // Cápsula debajo: qué rueda es y sobre qué archivo.
-        _caption = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(Glass.Text(dark)), TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 260 };
+        _caption = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(Glass.Text(dark)), TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 330 };
         _captionChip = new Border
         {
             CornerRadius = new CornerRadius(12),
@@ -500,9 +500,9 @@ internal sealed class WheelWindow : Window
                 inner.RenderTransform = slide;
                 content.Opacity = 0;
                 var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-                content.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)) { BeginTime = delay });
-                slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(-x / len * 8, 0, TimeSpan.FromMilliseconds(220)) { BeginTime = delay, EasingFunction = ease });
-                slide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(-y / len * 8, 0, TimeSpan.FromMilliseconds(220)) { BeginTime = delay, EasingFunction = ease });
+                content.Animate(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)) { BeginTime = delay });
+                slide.Animate(TranslateTransform.XProperty, new DoubleAnimation(-x / len * 8, 0, TimeSpan.FromMilliseconds(220)) { BeginTime = delay, EasingFunction = ease });
+                slide.Animate(TranslateTransform.YProperty, new DoubleAnimation(-y / len * 8, 0, TimeSpan.FromMilliseconds(220)) { BeginTime = delay, EasingFunction = ease });
             }
         }
         UpdateCaption();
@@ -619,9 +619,8 @@ internal sealed class WheelWindow : Window
             _caption.Inlines.Add(new System.Windows.Documents.Run(wheelName) { Foreground = new SolidColorBrush(Glass.Secondary(Dark)) });
             if (_files.Count > 0)
             {
-                var name = System.IO.Path.GetFileName(_files[0].TrimEnd('\\'));
-                var more = _files.Count > 1 ? $"  +{_files.Count - 1}" : "";
-                _caption.Inlines.Add(new System.Windows.Documents.Run("   " + name + more));
+                // Un archivo: su nombre. Varios: el resumen ("15 archivos · 12 imágenes, 3 PDF").
+                _caption.Inlines.Add(new System.Windows.Documents.Run("   " + Formats.Summary(_files)));
             }
         }
         _captionChip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
@@ -647,17 +646,17 @@ internal sealed class WheelWindow : Window
 
     private void AnimateOpen()
     {
-        BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
+        this.Animate(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
         var spring = new BackEase { Amplitude = 0.22, EasingMode = EasingMode.EaseOut };
         var grow = new DoubleAnimation(0.9, 1, TimeSpan.FromMilliseconds(260)) { EasingFunction = spring };
-        _scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
-        _scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        _scale.Animate(ScaleTransform.ScaleXProperty, grow);
+        _scale.Animate(ScaleTransform.ScaleYProperty, grow);
         // Un leve desenfoque que se aclara; se saca al terminar para no costar nada mientras está abierta.
         var blur = new BlurEffect { Radius = 6, RenderingBias = RenderingBias.Performance };
         _root.Effect = blur;
         var sharpen = new DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(150));
         sharpen.Completed += (_, _) => _root.Effect = null;
-        blur.BeginAnimation(BlurEffect.RadiusProperty, sharpen);
+        blur.Animate(BlurEffect.RadiusProperty, sharpen);
     }
 
     public void HideWheel()
@@ -683,9 +682,9 @@ internal sealed class WheelWindow : Window
             WheelHidden?.Invoke();
         };
         var shrink = new DoubleAnimation(0.95, duration) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn } };
-        _scale.BeginAnimation(ScaleTransform.ScaleXProperty, shrink);
-        _scale.BeginAnimation(ScaleTransform.ScaleYProperty, shrink);
-        BeginAnimation(OpacityProperty, fade);
+        _scale.Animate(ScaleTransform.ScaleXProperty, shrink);
+        _scale.Animate(ScaleTransform.ScaleYProperty, shrink);
+        this.Animate(OpacityProperty, fade);
     }
 
     /// <summary>Para --snapshot: abre como en un arrastre, pero con archivos ya conocidos.</summary>
@@ -730,7 +729,7 @@ internal sealed class WheelWindow : Window
     public void HideNow()
     {
         _closing = true;
-        BeginAnimation(OpacityProperty, null);
+        this.Animate(OpacityProperty, null);
         Hide();
         _closing = false;
         _root.Effect = null;

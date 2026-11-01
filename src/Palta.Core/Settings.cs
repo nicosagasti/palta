@@ -29,6 +29,9 @@ public sealed class Settings
     /// <summary>"windows" (por defecto: oscuro, opaco y con las notificaciones del sistema) o "glass" (Liquid glass).</summary>
     public string Theme { get; set; } = "windows";
 
+    /// <summary>Color de acento: "" = el de Windows, o "#RRGGBB" elegido en Configuración.</summary>
+    public string Accent { get; set; } = "";
+
     /// <summary>Solo para la ventana de configuración: el estado real es si existe el .lnk.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public bool DesktopShortcut { get; set; }
@@ -53,6 +56,7 @@ public sealed class Settings
             s.Hotkey ??= d.Hotkey;
             s.ClipboardHotkey ??= d.ClipboardHotkey;
             s.Theme ??= d.Theme;
+            s.Accent ??= d.Accent;
             return s;
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)

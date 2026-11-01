@@ -51,11 +51,24 @@ public static class PdfBackend
     }
 
     /// <summary>Una página por imagen, del tamaño de la imagen (a 96 DPI).</summary>
-    public static void ImagesToPdf(IReadOnlyList<string> images, string dst)
+    public static void ImagesToPdf(IReadOnlyList<string> images, string dst) => Combine(images, dst);
+
+    /// <summary>
+    /// Un solo PDF con todo, en el orden recibido: cada imagen es una página de su tamaño (a 96 DPI)
+    /// y cada PDF aporta todas sus páginas.
+    /// </summary>
+    public static void Combine(IReadOnlyList<string> files, string dst)
     {
         using var output = new PdfDocument();
-        foreach (var path in images)
+        foreach (var path in files)
         {
+            if (Formats.KindOf(path) == FileKind.Pdf)
+            {
+                using var input = Open(path);
+                foreach (var pdfPage in input.Pages)
+                    output.AddPage(pdfPage);
+                continue;
+            }
             var jpeg = ImageBackend.ToJpegBytes(path, out var w, out var h);
             using var stream = new MemoryStream(jpeg);
             using var image = XImage.FromStream(stream);

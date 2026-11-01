@@ -171,9 +171,9 @@ internal sealed class JobToast : Window
     {
         var d = TimeSpan.FromMilliseconds(on ? 120 : 160);
         var hasActions = _actions.Children.Count > 0;
-        _actions.BeginAnimation(OpacityProperty, new DoubleAnimation(on && hasActions ? 1 : 0, d));
-        _time.BeginAnimation(OpacityProperty, new DoubleAnimation(on && hasActions ? 0 : 1, d));
-        _close.BeginAnimation(OpacityProperty, new DoubleAnimation(on ? 1 : 0, d));
+        _actions.Animate(OpacityProperty, new DoubleAnimation(on && hasActions ? 1 : 0, d));
+        _time.Animate(OpacityProperty, new DoubleAnimation(on && hasActions ? 0 : 1, d));
+        _close.Animate(OpacityProperty, new DoubleAnimation(on ? 1 : 0, d));
     }
 
     private static BitmapImage LoadIcon()
@@ -268,7 +268,7 @@ internal sealed class JobToast : Window
     {
         _barTrack.UpdateLayout();
         var full = _barTrack.ActualWidth > 0 ? _barTrack.ActualWidth : CardWidth - 30;
-        _barFill.BeginAnimation(WidthProperty, new DoubleAnimation(full * Math.Clamp(p, 0, 1), TimeSpan.FromMilliseconds(220)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+        _barFill.Animate(WidthProperty, new DoubleAnimation(full * Math.Clamp(p, 0, 1), TimeSpan.FromMilliseconds(220)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
     }
 
     /// <summary>La miniatura del resultado, como el adjunto de una notificación; aparece con un pequeño rebote.</summary>
@@ -300,9 +300,9 @@ internal sealed class JobToast : Window
         element.RenderTransform = s;
         element.Opacity = 0;
         var grow = new DoubleAnimation(1, TimeSpan.FromMilliseconds(280)) { EasingFunction = new BackEase { Amplitude = 0.35, EasingMode = EasingMode.EaseOut } };
-        s.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
-        s.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
-        element.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)));
+        s.Animate(ScaleTransform.ScaleXProperty, grow);
+        s.Animate(ScaleTransform.ScaleYProperty, grow);
+        element.Animate(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)));
     }
 
     private static BitmapImage? LoadThumb(string path)
@@ -395,17 +395,17 @@ internal sealed class JobToast : Window
         _glass.Source = GlassCapture.Backdrop(x, y, (int)(CardWidth * scale), (int)(CardHeight * scale), Dark);
         Opacity = 0;
         Show();
-        BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(180)));
+        this.Animate(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(180)));
         var spring = new BackEase { Amplitude = 0.18, EasingMode = EasingMode.EaseOut };
         var enter = TimeSpan.FromMilliseconds(380);
         if (enterFrom.X != 0)
-            _slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(enterFrom.X * CardWidth * 0.35, 0, enter) { EasingFunction = spring });
+            _slide.Animate(TranslateTransform.XProperty, new DoubleAnimation(enterFrom.X * CardWidth * 0.35, 0, enter) { EasingFunction = spring });
         if (enterFrom.Y != 0)
-            _slide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(enterFrom.Y * CardHeight * 0.6, 0, enter) { EasingFunction = spring });
+            _slide.Animate(TranslateTransform.YProperty, new DoubleAnimation(enterFrom.Y * CardHeight * 0.6, 0, enter) { EasingFunction = spring });
     }
 
     public void MoveTo(double top) =>
-        BeginAnimation(TopProperty, new DoubleAnimation(top, TimeSpan.FromMilliseconds(240)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+        this.Animate(TopProperty, new DoubleAnimation(top, TimeSpan.FromMilliseconds(240)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
 
     /// <summary>Se va hacia el borde de la pantalla, más rápido de lo que entró.</summary>
     public void FadeOut()
@@ -424,10 +424,10 @@ internal sealed class JobToast : Window
         };
         var ease = new QuadraticEase { EasingMode = EasingMode.EaseIn };
         if (_leaveTo.X != 0)
-            _slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(_leaveTo.X * CardWidth * 0.4, duration) { EasingFunction = ease });
+            _slide.Animate(TranslateTransform.XProperty, new DoubleAnimation(_leaveTo.X * CardWidth * 0.4, duration) { EasingFunction = ease });
         if (_leaveTo.Y != 0)
-            _slide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(_leaveTo.Y * CardHeight * 0.6, duration) { EasingFunction = ease });
-        BeginAnimation(OpacityProperty, fade);
+            _slide.Animate(TranslateTransform.YProperty, new DoubleAnimation(_leaveTo.Y * CardHeight * 0.6, duration) { EasingFunction = ease });
+        this.Animate(OpacityProperty, fade);
     }
 
     /// <summary>Para --snapshot: muestra el estado "mouse encima".</summary>

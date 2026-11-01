@@ -64,7 +64,17 @@ public sealed class Operation(
     public Task<IReadOnlyList<string>> RunAsync(IReadOnlyList<string> files, IProgress<double> progress, CancellationToken ct) =>
         run(files, progress, ct);
 
-    /// <summary>Operación que procesa cada archivo por separado; aplica si todos son de <paramref name="kind"/> y pasan <paramref name="accepts"/>.</summary>
+    /// <summary>
+    /// Cuántos archivos de un mismo trabajo se procesan a la vez: la mitad de los núcleos, entre 1 y 4.
+    /// Más no rinde (las imágenes grandes comen memoria) y deja la PC usable mientras convierte.
+    /// </summary>
+    public static int Parallelism { get; set; } = Math.Clamp(Environment.ProcessorCount / 2, 1, 4);
+
+    /// <summary>
+    /// Operación que procesa cada archivo por separado (varios a la vez, ver <see cref="Parallelism"/>);
+    /// aplica si todos son de <paramref name="kind"/> y pasan <paramref name="accepts"/>.
+    /// Los resultados salen en el mismo orden que los archivos, y el progreso es el total del trabajo.
+    /// </summary>
     public static Operation PerFile(
         string id, WheelKind wheel, string label, string glyph, FileKind kind,
         Func<string, CancellationToken, Task<string>> runOne,
@@ -73,13 +83,17 @@ public sealed class Operation(
             files => files.All(f => Formats.KindOf(f) == kind && (accepts?.Invoke(f) ?? true)),
             async (files, progress, ct) =>
             {
-                var outputs = new List<string>(files.Count);
-                for (var i = 0; i < files.Count; i++)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    outputs.Add(await runOne(files[i], ct));
-                    progress.Report((i + 1) / (double)files.Count);
-                }
+                var outputs = new string[files.Count];
+                var done = 0;
+                // Si uno falla, Parallel deja de arrancar los que faltan y el error llega tal cual.
+                // Dos resultados con el mismo nombre no se pisan: SafeWrite le busca otro al segundo.
+                await Parallel.ForEachAsync(Enumerable.Range(0, files.Count),
+                    new ParallelOptions { MaxDegreeOfParallelism = Parallelism, CancellationToken = ct },
+                    async (i, token) =>
+                    {
+                        outputs[i] = await runOne(files[i], token);
+                        progress.Report(Interlocked.Increment(ref done) / (double)files.Count);
+                    });
                 return outputs;
             });
 

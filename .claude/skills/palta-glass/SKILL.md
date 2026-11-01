@@ -110,9 +110,16 @@ Tokens actuales — usalos en vez de inventar duraciones nuevas:
 
 Cerrar siempre es más rápido que abrir. Nada dura más de 320 ms.
 
-## Accesibilidad (obligatoria — hoy falta implementarla)
+## Accesibilidad (obligatoria — ya implementada)
 
-Al tocar cualquier ventana, verificá estas tres preferencias de Windows. Si el helper no existe todavía, **crealo en `Theme/SystemTheme.cs`** (por ejemplo, propiedades en `Palette`) y usalo desde todas las ventanas:
+Está en `Theme/Accessibility.cs` (`Accessibility.Transparency`, `.Motion`, `.HighContrast`, releídas con `UserPreferenceChanged`) y entra sola por `Look`, `Glass.*` y `Palette`. Para una ventana nueva:
+
+- **Animar siempre con `elemento.Animate(propiedad, animación)`**, nunca con `BeginAnimation`: así respeta los efectos de animación apagados.
+- Colores solo de `Glass.*` / `Palette` (así el contraste alto funciona sin hacer nada).
+- Fondo solo con `GlassCapture.Backdrop`/`BackdropBehind` (así la transparencia apagada funciona sin hacer nada).
+- Probar con `PALTA_A11Y=notransparency`, `nomotion` y `contrast` (se pueden combinar con comas).
+
+Las tres preferencias de Windows y qué hace Palta con cada una:
 
 1. **Efectos de transparencia apagados** (Configuración → Personalización → Colores):
    `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\EnableTransparency == 0`
@@ -121,7 +128,7 @@ Al tocar cualquier ventana, verificá estas tres preferencias de Windows. Si el 
    `SystemParameters.ClientAreaAnimation == false`
    → sin escalas, rebotes, deslizamientos ni escalonado; solo fundidos de ≤ 80 ms (o aparición instantánea).
 3. **Contraste alto**: `SystemParameters.HighContrast == true`
-   → nada de vidrio: fondo `SystemColors.WindowBrush`, texto `SystemColors.WindowTextBrush`, bordes de 2 px con `SystemColors.WindowTextBrush`, resaltado con `SystemColors.HighlightBrush`/`HighlightTextBrush`.
+   → nada de vidrio: fondo `SystemColors.WindowBrush`, texto `SystemColors.WindowTextBrush`, bordes de 2 px con `SystemColors.WindowTextBrush`, resaltado con `SystemColors.HighlightBrush`/`HighlightTextBrush`. (Pendiente: hoy los bordes quedan con el grosor de siempre, 1 px, y el texto sobre el resaltado no usa `HighlightTextBrush`.)
 
 Escuchá `Microsoft.Win32.SystemEvents.UserPreferenceChanged` para releer esto (y el tema) sin reiniciar la app.
 

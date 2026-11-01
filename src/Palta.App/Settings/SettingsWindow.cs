@@ -20,6 +20,22 @@ internal sealed class SettingsWindow : Window
     private readonly TextBox _clipHotkey = new() { IsReadOnly = true, IsReadOnlyCaretVisible = false, MinWidth = 180 };
     private readonly CheckBox _clipEnabled = new() { Content = "Guardar historial del portapapeles" };
     private readonly ComboBox _theme = new() { MinWidth = 180 };
+    private readonly ComboBox _accent = new() { MinWidth = 180 };
+
+    /// <summary>Acentos para elegir: los de la paleta de Windows 11 más el verde palta. "" = el de Windows.</summary>
+    private static readonly (string Hex, string Name)[] Accents =
+    [
+        ("", "El de Windows"),
+        ("#7CB342", "Verde palta"),
+        ("#0078D4", "Azul"),
+        ("#00B7C3", "Verde azulado"),
+        ("#8764B8", "Violeta"),
+        ("#E3008C", "Rosa"),
+        ("#E81123", "Rojo"),
+        ("#F7630C", "Naranja"),
+        ("#FFB900", "Amarillo"),
+        ("#7A7574", "Grafito"),
+    ];
     private readonly ComboBox _clipDays = new() { MinWidth = 180 };
     private readonly ComboBox _clipItems = new() { MinWidth = 180 };
     private readonly ComboBox _clipSpace = new() { MinWidth = 180 };
@@ -58,6 +74,7 @@ internal sealed class SettingsWindow : Window
         Fill(_clipItems, current.ClipboardMaxItems, [(50, "50 elementos"), (200, "200 elementos"), (500, "500 elementos"), (1000, "1000 elementos"), (0, "Sin límite")], n => $"{n} elementos");
         Fill(_clipSpace, current.ClipboardMaxImageMegabytes, [(100, "100 MB"), (300, "300 MB"), (1024, "1 GB"), (5120, "5 GB"), (0, "Sin límite")], n => $"{n} MB");
         UpdateUsage();
+        FillAccents(current.Accent);
         Fill(_theme, (int)Look.Parse(current.Theme), [((int)AppTheme.Windows, Look.Name(AppTheme.Windows)), ((int)AppTheme.Glass, Look.Name(AppTheme.Glass))], _ => Look.Name(AppTheme.Windows));
         // Si se cambia desde la bandeja con esta ventana abierta, que no lo pise al guardar.
         void OnLook() => Dispatcher.BeginInvoke(() => _theme.SelectedItem = ((IEnumerable<Choice>)_theme.ItemsSource).First(c => c.Value == (int)Look.Current));
@@ -68,8 +85,9 @@ internal sealed class SettingsWindow : Window
 
         var panel = new StackPanel { Margin = new Thickness(24) };
         panel.Children.Add(Row("Tema", _theme));
-        panel.Children.Add(new TextBlock { Text = "Windows: oscuro, opaco y con las notificaciones del sistema. Liquid glass: vidrio translúcido y avisos propios. También se cambia desde el ícono de la bandeja.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 16), Opacity = 0.7 });
-        panel.Children.Add(new TextBlock { Text = "Mientras arrastrás un archivo, tocá una tecla para abrir una rueda.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 16), Opacity = 0.8 });
+        panel.Children.Add(new TextBlock { Text = "Windows: oscuro, opaco y con las notificaciones del sistema. Liquid glass: vidrio translúcido y avisos propios. También se cambia desde el ícono de la bandeja.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 8), Opacity = 0.7 });
+        panel.Children.Add(Row("Color de acento", _accent));
+        panel.Children.Add(new TextBlock { Text = "Mientras arrastrás un archivo, tocá una tecla para abrir una rueda.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 16, 0, 16), Opacity = 0.8 });
         panel.Children.Add(Row("Convertir", _convert));
         panel.Children.Add(Row("Herramientas", _tools));
         panel.Children.Add(Row("Acciones", _actions));
@@ -129,6 +147,39 @@ internal sealed class SettingsWindow : Window
     }
 
     private static int ValueOf(ComboBox box) => (box.SelectedItem as Choice)?.Value ?? 0;
+
+    /// <summary>Cada opción con su muestra de color; "El de Windows" muestra el acento actual del sistema.</summary>
+    private void FillAccents(string current)
+    {
+        var options = Accents.ToList();
+        // Un color puesto a mano en settings.json que no está en la lista se conserva.
+        if (Palette.ParseAccent(current) is not null && options.All(o => !string.Equals(o.Hex, current, StringComparison.OrdinalIgnoreCase)))
+            options.Add((current.ToUpperInvariant(), current.ToUpperInvariant()));
+        foreach (var (hex, name) in options)
+        {
+            var color = Palette.ParseAccent(hex) ?? Palette.WindowsAccent() ?? Palette.PaltaGreen;
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            row.Children.Add(new Border
+            {
+                Width = 14,
+                Height = 14,
+                CornerRadius = new CornerRadius(7),
+                Background = new System.Windows.Media.SolidColorBrush(color),
+                BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x40, 0x80, 0x80, 0x80)),
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(0, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            row.Children.Add(new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
+            var item = new ComboBoxItem { Content = row, Tag = hex };
+            // Que el lector de pantalla diga el nombre del color y no "StackPanel".
+            System.Windows.Automation.AutomationProperties.SetName(item, name);
+            _accent.Items.Add(item);
+            if (string.Equals(hex, current ?? "", StringComparison.OrdinalIgnoreCase))
+                _accent.SelectedItem = item;
+        }
+        _accent.SelectedItem ??= _accent.Items[0];
+    }
 
     private void UpdateUsage()
     {
@@ -203,6 +254,7 @@ internal sealed class SettingsWindow : Window
             ClipboardHotkey = _clipHotkey.Text,
             ClipboardEnabled = _clipEnabled.IsChecked == true,
             Theme = Look.ToSetting((AppTheme)ValueOf(_theme)),
+            Accent = (_accent.SelectedItem as ComboBoxItem)?.Tag as string ?? "",
             ClipboardKeepDays = ValueOf(_clipDays),
             ClipboardMaxItems = ValueOf(_clipItems),
             ClipboardMaxImageMegabytes = ValueOf(_clipSpace),

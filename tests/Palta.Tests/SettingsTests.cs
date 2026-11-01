@@ -28,6 +28,8 @@ public class SettingsTests
     {
         using var d = new TempDir();
         Assert.Equal("windows", new Settings().Theme);
+        Assert.Equal("", new Settings().Accent);
+        Assert.Equal("", Settings.Load(d.File("acento.json", "{ \"Accent\": null }")).Accent);
         // Un settings.json de antes del cambio (sin Theme) o con null queda en el tema Windows.
         Assert.Equal("windows", Settings.Load(d.File("viejo.json", "{ \"ConvertKey\": \"Shift\" }")).Theme);
         Assert.Equal("windows", Settings.Load(d.File("nulo.json", "{ \"Theme\": null }")).Theme);

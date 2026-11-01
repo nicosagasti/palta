@@ -5,16 +5,16 @@ Cosas acordadas pero todavía no hechas.
 - [x] **Acciones iguales a las de Tangerine**: Compartir, Flotar y Terminal (hecho).
 - [x] **Portapapeles flotante (picture in picture)**: que el historial pueda quedar como ventanita siempre visible y movible (hecho: chinche o Ctrl+T, o arrastrarlo; recuerda dónde quedó).
 - [x] **Tema Windows y Liquid glass**: tema por defecto como Windows 11 (oscuro, opaco y con las notificaciones del sistema) y Liquid glass para el vidrio de antes; se elige en Configuración o con clic derecho en el ícono de la bandeja → Tema (hecho).
-- [ ] **Temas personalizables**: elegir y cambiar el aspecto desde Configuración. Ya se elige entre Windows y Liquid glass; falta el color de acento propio y más variantes.
+- [ ] **Temas personalizables**: elegir y cambiar el aspecto desde Configuración. Ya se elige entre Windows y Liquid glass, y el color de acento (hecho); falta la variante clara del tema Windows y más variantes.
 - [ ] **Convertir documentos**: DOCX, PDF, ODT, TXT y demás formatos de oficina.
 - [x] **Comprimir y descomprimir**: carpetas y archivos a ZIP, y extraer ZIP, RAR, 7Z y TAR (hecho, en Herramientas).
 - [ ] **Acciones sobre texto seleccionado**: seleccionar un texto o un párrafo en cualquier app y abrir una rueda con cosas para hacer con él.
-- [ ] **Muchos archivos a la vez**: definir qué ofrece la rueda cuando se sueltan muchos archivos, sean todos del mismo tipo o de tipos distintos.
+- [ ] **Muchos archivos a la vez**: definir qué ofrece la rueda cuando se sueltan muchos archivos, sean todos del mismo tipo o de tipos distintos. Primera parte hecha: resumen en la cápsula, "Unir en PDF" con imágenes y PDF mezclados, y varios archivos a la vez con una sola barra de progreso.
 - [ ] **Ruedas personalizables**: que cada usuario elija qué opciones ve en Shift, Ctrl y Alt para cada tipo de archivo, a partir de una lista predefinida.
 - [x] **Límite del historial del portapapeles**: por días (30 por defecto), cantidad y espacio de imágenes, desde Configuración; lo fijado no se borra (hecho).
 - [ ] Video y audio (MP4, MP3, etc.).
-- [ ] Preferencias de accesibilidad de Windows (transparencia, animaciones, contraste alto).
-- [ ] Detalles menores de la revisión de código: falta reinstalar los hooks si Windows los quita (cancelado, temporales ocultos y carpetas con nombre de imagen ya están).
+- [x] Preferencias de accesibilidad de Windows (transparencia, animaciones, contraste alto) (hecho).
+- [x] Detalles menores de la revisión de código: cancelado, temporales ocultos, carpetas con nombre de imagen y reinstalar los hooks si Windows los quita (hecho).
 
 ## Acciones iguales a las de Tangerine
 
@@ -75,7 +75,8 @@ Cómo encaja con lo que ya existe:
   - **Liquid glass**: el vidrio de siempre, con los avisos propios estilo macOS.
 - Se cambia desde **Configuración → Tema** o con **clic derecho en el ícono de la bandeja → Tema**, y se aplica al toque (cada ventana lo toma al abrirse).
 - Cómo está hecho: `Theme/Look.cs` guarda el tema; `Glass.*` y `GlassCapture.Backdrop` devuelven el material opaco cuando no es Liquid glass, así las ventanas no cambiaron. Las notificaciones de Windows están en `Jobs/WindowsToasts.cs`.
-- Falta: color de acento propio, variante clara del tema Windows y las variantes de color.
+- Color de acento propio: hecho. En Configuración → Color de acento, "El de Windows" o uno de la paleta de Windows 11 más el verde palta (`"Accent": "#RRGGBB"` en `settings.json`).
+- Falta: variante clara del tema Windows y las variantes de color.
 
 ## Convertir documentos
 
@@ -136,6 +137,13 @@ Cómo encaja:
 - **Carpetas soltadas junto con archivos**: decidir si se entra a la carpeta y se procesan los archivos de adentro, o si se ofrecen solo las acciones (y Comprimir en ZIP cuando exista).
 - La cápsula de abajo de la rueda debería decir el resumen: "15 archivos · 12 imágenes, 3 PDF".
 
+**Estado: primera parte hecha.**
+
+- **Resumen en la cápsula** (`Formats.Summary`): con un archivo, su nombre; con varios del mismo tipo, "12 imágenes"; mezclados, "15 archivos · 12 imágenes, 3 PDF"; con carpetas, "elementos".
+- **Unir mezclados**: "Unir en PDF" (`mixed-merge-pdf`, en Herramientas) aparece cuando hay imágenes y PDF juntos; arma un solo PDF en el orden de la selección, con todas las páginas de cada PDF (`PdfBackend.Combine`).
+- **Rapidez**: las operaciones archivo por archivo procesan varios a la vez (la mitad de los núcleos, entre 1 y 4, `Operation.Parallelism`), con una sola barra de progreso total; los resultados salen en el orden de los archivos y dos con el mismo nombre no se pisan.
+- Falta: opciones que sirvan para *algunos* de los archivos ("JPG · 12 de 15"), agrupar por tipo, la carpeta de salida para muchos resultados, los avisos con muchísimos archivos, reintentar solo los que fallaron y qué hacer con carpetas mezcladas.
+
 ## Ruedas personalizables
 
 Que cada usuario pueda elegir, desde **Configuración**, qué opciones aparecen en cada rueda (**Shift** = Convertir, **Ctrl** = Herramientas, **Alt** = Acciones) y para cada tipo de archivo (imágenes, PDF y los que se sumen después).
@@ -172,5 +180,5 @@ Que cada usuario pueda elegir, desde **Configuración**, qué opciones aparecen 
 ## Otras pendientes
 
 - **Video y audio** con FFmpeg: MP4, MOV, MKV, WebM y GIF; extraer el audio a MP3; comprimir.
-- **Accesibilidad**: respetar las preferencias de Windows de transparencia, animaciones y contraste alto, como pide la skill de diseño.
-- **Detalles menores de la revisión de código**: reinstalar los hooks si Windows los quita. Ya están: avisar "Cancelado" al cerrar el selector de carpeta, temporales `.palta-*` ocultos y carpetas con nombre de imagen sin opciones de imagen.
+- **Accesibilidad**: respetar las preferencias de Windows de transparencia, animaciones y contraste alto, como pide la skill de diseño. **Hecho:** `Theme/Accessibility.cs` lee las tres preferencias (y las relee si cambian). Sin transparencia, el vidrio no captura el fondo y queda casi opaco; sin animaciones, todo pasa por `Animate`: los fundidos duran 80 ms y lo demás salta al final; con contraste alto no hay vidrio, solo colores del sistema, y los avisos son las notificaciones de Windows. Para probarlo: `PALTA_A11Y=notransparency,nomotion,contrast`.
+- **Detalles menores de la revisión de código**: reinstalar los hooks si Windows los quita. Ya están: avisar "Cancelado" al cerrar el selector de carpeta, temporales `.palta-*` ocultos y carpetas con nombre de imagen sin opciones de imagen. **Hecho también lo de los hooks:** una vez por minuto se compara la última entrada de mouse o teclado (`GetLastInputInfo`) con lo último que vieron los hooks; si hubo actividad y no la vieron, se reinstalan (`Core/Input/HookWatchdog.cs`).

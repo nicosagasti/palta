@@ -25,7 +25,7 @@ internal sealed class ClipboardWindow : Window
     private const double PanelWidth = 420;
     private const double PanelHeight = 540;
     /// <summary>Esquinas: amplias en Liquid glass, las de Windows 11 (8 px) en el tema Windows.</summary>
-    private static double Radius => Look.Translucent ? 18 : 8;
+    private static double Radius => Look.IsGlass ? 18 : 8;
     /// <summary>Margen transparente alrededor del panel donde se dibuja la sombra.</summary>
     private const double ShadowMargin = 28;
 
@@ -176,10 +176,10 @@ internal sealed class ClipboardWindow : Window
         Win32.SetWindowPos(_hwnd, Win32.HWND_TOPMOST, left - margin, top - margin, 0, 0, Win32.SWP_NOSIZE);
         Activate();
         _search.Focus();
-        BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
+        this.Animate(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
         var grow = new DoubleAnimation(0.96, 1, TimeSpan.FromMilliseconds(240)) { EasingFunction = new BackEase { Amplitude = 0.2, EasingMode = EasingMode.EaseOut } };
-        _scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
-        _scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        _scale.Animate(ScaleTransform.ScaleXProperty, grow);
+        _scale.Animate(ScaleTransform.ScaleYProperty, grow);
     }
 
     private void Close2()
@@ -513,7 +513,7 @@ internal sealed class ClipboardWindow : Window
 
         var row = new Border
         {
-            CornerRadius = new CornerRadius(Look.Translucent ? 10 : 4),
+            CornerRadius = new CornerRadius(Look.IsGlass ? 10 : 4),
             Padding = new Thickness(8, 7, 8, 7),
             Margin = new Thickness(0, 0, 0, 1),
             Child = grid,

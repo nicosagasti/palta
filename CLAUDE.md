@@ -23,7 +23,8 @@ Antes de publicar cerrá Palta (`Stop-Process -Name Palta` o Salir en la bandeja
 
 - `Palta.exe --bench`: tiempo de apertura de la rueda y memoria. Presupuesto: < 100 ms, < 60 MB, 0 % CPU en reposo.
 - `Palta.exe --snapshot carpeta`: PNG de la rueda, el portapapeles, los avisos y el estante. Mirarlos con Read.
-- Variables: `PALTA_LOOK=windows|glass` (tema de Palta), `PALTA_THEME=light|dark` (claro/oscuro), `PALTA_DEBUG=1`, `PALTA_CLIPBOARD_DIR`.
+- Variables: `PALTA_LOOK=windows|glass` (tema de Palta), `PALTA_THEME=light|dark` (claro/oscuro), `PALTA_A11Y=notransparency,nomotion,contrast` (simula las preferencias de accesibilidad), `PALTA_DEBUG=1`, `PALTA_CLIPBOARD_DIR`.
+- Animaciones: siempre `elemento.Animate(...)` (en `Theme/Accessibility.cs`), nunca `BeginAnimation` directo, para respetar los efectos de animación apagados.
 - `Palta.exe --toast-test`: manda dos notificaciones de Windows de prueba y lista las que registró el sistema.
 - Antes de dar por buena una interfaz, sacar `--snapshot` con `PALTA_LOOK=windows` y con `PALTA_LOOK=glass`.
 - **Nunca sacar capturas de pantalla completa del escritorio** (una vez salió la cámara del usuario). Usar `--snapshot`.

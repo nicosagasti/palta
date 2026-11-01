@@ -25,7 +25,7 @@ internal sealed class ShelfWindow : Window
 {
     private const double PanelWidth = 292;
     /// <summary>Esquinas: amplias en Liquid glass, las de Windows 11 (8 px) en el tema Windows.</summary>
-    private static double Radius => Look.Translucent ? 18 : 8;
+    private static double Radius => Look.IsGlass ? 18 : 8;
     private const double ShadowMargin = 22;
     private const double MaxListHeight = 330;
 
@@ -124,10 +124,10 @@ internal sealed class ShelfWindow : Window
         }
         Show();
         Recapture();
-        BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
+        this.Animate(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
         var grow = new DoubleAnimation(0.92, 1, TimeSpan.FromMilliseconds(260)) { EasingFunction = new BackEase { Amplitude = 0.22, EasingMode = EasingMode.EaseOut } };
-        _scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
-        _scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        _scale.Animate(ScaleTransform.ScaleXProperty, grow);
+        _scale.Animate(ScaleTransform.ScaleYProperty, grow);
     }
 
     /// <summary>Cerrar vacía el estante; se va más rápido de lo que vino.</summary>
@@ -142,9 +142,9 @@ internal sealed class ShelfWindow : Window
             _glass.Background = null;
             _recapture.Stop();
         };
-        _scale.BeginAnimation(ScaleTransform.ScaleXProperty, shrink);
-        _scale.BeginAnimation(ScaleTransform.ScaleYProperty, shrink);
-        BeginAnimation(OpacityProperty, fade);
+        _scale.Animate(ScaleTransform.ScaleXProperty, shrink);
+        _scale.Animate(ScaleTransform.ScaleYProperty, shrink);
+        this.Animate(OpacityProperty, fade);
     }
 
     private void Recapture()
@@ -426,7 +426,7 @@ internal sealed class ShelfWindow : Window
     }
 
     private void ShowDropRing(bool on) =>
-        _dropRing.BeginAnimation(OpacityProperty, new DoubleAnimation(on ? 0.9 : 0, TimeSpan.FromMilliseconds(on ? 90 : 140)));
+        _dropRing.Animate(OpacityProperty, new DoubleAnimation(on ? 0.9 : 0, TimeSpan.FromMilliseconds(on ? 90 : 140)));
 
     // ---------- Teclado ----------
 

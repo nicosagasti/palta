@@ -67,7 +67,8 @@ public class BackendTests
     public void For_MixedImageAndPdf_OnlyCommonOps()
     {
         string[] mixed = [@"C:\x\a.png", @"C:\x\b.pdf"];
-        Assert.Empty(Cat.For(WheelKind.Tools, mixed));
+        // De lo de una sola clase no queda nada; sí "Unir en PDF", que junta las dos.
+        Assert.Equal(["mixed-merge-pdf"], Cat.For(WheelKind.Tools, mixed).Select(o => o.Id));
         Assert.Empty(Cat.For(WheelKind.Convert, mixed));
         Assert.Contains("copy-path", Cat.For(WheelKind.Actions, mixed).Select(o => o.Id));
     }

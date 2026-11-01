@@ -17,6 +17,14 @@ internal sealed class InputHooks(DragSession session) : IDisposable
     // Referencias fuertes: si el GC junta los delegados, el hook revienta.
     private Win32.HookProc? _mouseProc, _keyboardProc;
 
+    /// <summary>Mensaje propio que el reloj del vigilante le manda al hilo de los hooks.</summary>
+    private const uint WM_CHECK_HOOKS = Win32.WM_APP + 1;
+    /// <summary>Cada cuánto se fija si Windows quitó los hooks: un minuto, casi gratis.</summary>
+    private static readonly TimeSpan CheckEvery = TimeSpan.FromMinutes(1);
+    private Timer? _watchdog;
+    /// <summary>Último evento que vio cualquiera de los dos hooks (GetTickCount, 32 bits).</summary>
+    private uint _lastEvent;
+
     public void Start()
     {
         var ready = new ManualResetEventSlim();
@@ -30,23 +38,56 @@ internal sealed class InputHooks(DragSession session) : IDisposable
         _threadId = Win32.GetCurrentThreadId();
         _mouseProc = MouseProc;
         _keyboardProc = KeyboardProc;
-        var module = Win32.GetModuleHandleW(null);
-        _mouseHook = Win32.SetWindowsHookExW(Win32.WH_MOUSE_LL, _mouseProc, module, 0);
-        _keyboardHook = Win32.SetWindowsHookExW(Win32.WH_KEYBOARD_LL, _keyboardProc, module, 0);
-        if (_mouseHook == IntPtr.Zero || _keyboardHook == IntPtr.Zero)
-            Core.Log.Error($"No se pudieron instalar los hooks (error {Marshal.GetLastWin32Error()})");
+        Install();
         ready.Set();
+        // El reloj corre en otro hilo y solo le avisa a este: los hooks se tocan siempre desde el hilo que los instaló.
+        _watchdog = new Timer(_ => Win32.PostThreadMessageW(_threadId, WM_CHECK_HOOKS, IntPtr.Zero, IntPtr.Zero), null, CheckEvery, CheckEvery);
 
-        while (Win32.GetMessageW(out _, IntPtr.Zero, 0, 0) > 0)
+        while (Win32.GetMessageW(out var msg, IntPtr.Zero, 0, 0) > 0)
         {
+            if (msg.message == WM_CHECK_HOOKS)
+                CheckHooks();
         }
 
+        _watchdog.Dispose();
+        Uninstall();
+    }
+
+    private void Install()
+    {
+        var module = Win32.GetModuleHandleW(null);
+        _mouseHook = Win32.SetWindowsHookExW(Win32.WH_MOUSE_LL, _mouseProc!, module, 0);
+        _keyboardHook = Win32.SetWindowsHookExW(Win32.WH_KEYBOARD_LL, _keyboardProc!, module, 0);
+        _lastEvent = (uint)Environment.TickCount;
+        if (_mouseHook == IntPtr.Zero || _keyboardHook == IntPtr.Zero)
+            Core.Log.Error($"No se pudieron instalar los hooks (error {Marshal.GetLastWin32Error()})");
+    }
+
+    private void Uninstall()
+    {
         Win32.UnhookWindowsHookEx(_mouseHook);
         Win32.UnhookWindowsHookEx(_keyboardHook);
+        _mouseHook = _keyboardHook = IntPtr.Zero;
+    }
+
+    /// <summary>Si usaste el mouse o el teclado y los hooks no se enteraron, Windows los quitó: se vuelven a poner.</summary>
+    private void CheckHooks()
+    {
+        var info = new Win32.LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<Win32.LASTINPUTINFO>() };
+        if (!Win32.GetLastInputInfo(ref info))
+            return;
+        if (!HookWatchdog.ShouldReinstall(info.dwTime, _lastEvent, (uint)Environment.TickCount))
+            return;
+        Core.Log.Info("Windows quitó los hooks de mouse y teclado: se vuelven a instalar");
+        Uninstall();
+        lock (session)
+            session.MouseUp(); // Por si quedó un arrastre a medias que nunca vio soltarse.
+        Install();
     }
 
     private IntPtr MouseProc(int nCode, IntPtr wParam, IntPtr lParam)
     {
+        _lastEvent = (uint)Environment.TickCount;
         if (nCode >= 0)
         {
             try
@@ -76,6 +117,7 @@ internal sealed class InputHooks(DragSession session) : IDisposable
 
     private IntPtr KeyboardProc(int nCode, IntPtr wParam, IntPtr lParam)
     {
+        _lastEvent = (uint)Environment.TickCount;
         if (nCode >= 0)
         {
             try

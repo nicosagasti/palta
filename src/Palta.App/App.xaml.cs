@@ -63,6 +63,7 @@ public partial class App : Application
         _catalog = Catalog.CreateDefault(new ShellHost(Dispatcher, files => (_shelf ??= new Shelf.ShelfWindow()).Add(files)));
         _queue = new JobQueue(JobQueue.DefaultConcurrency);
         Theme.Look.Current = Theme.Look.Parse(_settings.Theme);
+        Theme.Palette.CustomAccent = Theme.Palette.ParseAccent(_settings.Accent);
         _toasts = new ToastStack();
         _windowsToasts = new WindowsToasts(Dispatcher);
         _queue.JobAdded += job =>
@@ -142,7 +143,7 @@ public partial class App : Application
     /// <summary>Tema Windows: notificación del sistema. Liquid glass: el aviso propio, estilo macOS.</summary>
     private void Notify(Job job)
     {
-        if (Theme.Look.Translucent)
+        if (Theme.Look.IsGlass)
             _toasts.Add(job);
         else
             _windowsToasts.Add(job);
@@ -261,6 +262,7 @@ public partial class App : Application
             if (_clipHistory is not null)
                 _clipHistory.Limits = updated.ClipboardLimits;
             Theme.Look.Current = Theme.Look.Parse(updated.Theme);
+            Theme.Palette.CustomAccent = Theme.Palette.ParseAccent(updated.Accent);
             _tray?.SetTheme(Theme.Look.Current);
             RegisterHotkey();
             if (_hotkeyProblem is not null && previous.Hotkey != updated.Hotkey)

@@ -79,6 +79,8 @@ internal static class Bench
                 ("herramientas-png", WheelKind.Tools, [photo], 2),
                 ("convertir-pdf", WheelKind.Convert, [@"C:\docs\informe.pdf"], -1),
                 ("acciones", WheelKind.Actions, [report], 1),
+                ("herramientas-varios", WheelKind.Tools, [photo, report, Path.Combine(samples, "Fotos del viaje")], -1),
+                ("herramientas-mezcla", WheelKind.Tools, [photo, report], 0),
             };
             foreach (var c in cases)
             {

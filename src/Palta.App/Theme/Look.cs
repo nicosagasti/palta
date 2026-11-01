@@ -32,8 +32,17 @@ internal static class Look
         }
     }
 
-    /// <summary>¿Se usa el vidrio (captura del fondo, desenfoque, brillo)?</summary>
-    public static bool Translucent => Current == AppTheme.Glass;
+    /// <summary>
+    /// ¿Se dibuja con el estilo Liquid glass (tinte, brillo, filo de luz, avisos propios)? En contraste
+    /// alto nunca: ahí manda el sistema, con sus colores y sus notificaciones.
+    /// </summary>
+    public static bool IsGlass => Current == AppTheme.Glass && !Accessibility.HighContrast;
+
+    /// <summary>
+    /// ¿Se captura y desenfoca el fondo? Solo en Liquid glass y con los efectos de transparencia de
+    /// Windows prendidos; si están apagados, el vidrio queda casi opaco.
+    /// </summary>
+    public static bool Translucent => IsGlass && Accessibility.Transparency;
 
     /// <summary>Para las capturas de diseño: PALTA_LOOK=windows|glass fuerza un tema.</summary>
     private static AppTheme? Override => Environment.GetEnvironmentVariable("PALTA_LOOK") switch

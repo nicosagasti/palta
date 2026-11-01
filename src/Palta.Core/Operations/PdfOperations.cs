@@ -23,6 +23,19 @@ public static class PdfOperations
                 progress.Report(1);
                 return outputs;
             });
+        // Imágenes y PDF mezclados: un solo PDF en el orden de la selección. Si son todas imágenes o
+        // todos PDF ya están "Unir en PDF" y "Unir PDFs"; esta aparece solo con las dos cosas juntas.
+        yield return new Operation("mixed-merge-pdf", WheelKind.Tools, "Unir en PDF", "",
+            files => files.Count >= 2
+                && files.All(f => Formats.KindOf(f) is FileKind.Image or FileKind.Pdf)
+                && files.Any(f => Formats.KindOf(f) == FileKind.Image)
+                && files.Any(f => Formats.KindOf(f) == FileKind.Pdf),
+            async (files, progress, ct) =>
+            {
+                var output = await SafeWrite.WriteAsync(OutputPaths.For(files[0], ".pdf", "unido"), tmp => Task.Run(() => PdfBackend.Combine(files, tmp), ct), ct);
+                progress.Report(1);
+                return [output];
+            });
         yield return Operation.PerFile("pdf-rotate", WheelKind.Tools, "Rotar", "", FileKind.Pdf,
             (f, ct) => SafeWrite.WriteAsync(OutputPaths.For(f, ".pdf", "rotado"), tmp => Task.Run(() => PdfBackend.Rotate(f, tmp, 90), ct), ct));
     }
