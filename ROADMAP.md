@@ -8,7 +8,7 @@ Cosas acordadas pero todavía no hechas.
 - [ ] **Temas personalizables**: elegir y cambiar el aspecto desde Configuración. Ya se elige entre Windows y Liquid glass, y el color de acento (hecho); falta la variante clara del tema Windows y más variantes.
 - [ ] **Convertir documentos**: DOCX, PDF, ODT, TXT y demás formatos de oficina.
 - [x] **Comprimir y descomprimir**: carpetas y archivos a ZIP, y extraer ZIP, RAR, 7Z y TAR (hecho, en Herramientas).
-- [ ] **Acciones sobre texto seleccionado**: seleccionar un texto o un párrafo en cualquier app y abrir una rueda con cosas para hacer con él.
+- [ ] **Acciones sobre texto seleccionado**: seleccionar un texto o un párrafo en cualquier app y abrir una rueda con cosas para hacer con él. Primera parte hecha: arrastrar el texto y tocar Shift, Ctrl o Alt, con las opciones que no necesitan internet.
 - [ ] **Muchos archivos a la vez**: definir qué ofrece la rueda cuando se sueltan muchos archivos, sean todos del mismo tipo o de tipos distintos. Primera parte hecha: resumen en la cápsula, "Unir en PDF" con imágenes y PDF mezclados, y varios archivos a la vez con una sola barra de progreso.
 - [ ] **Ruedas personalizables**: que cada usuario elija qué opciones ve en Shift, Ctrl y Alt para cada tipo de archivo, a partir de una lista predefinida.
 - [x] **Límite del historial del portapapeles**: por días (30 por defecto), cantidad y espacio de imágenes, desde Configuración; lo fijado no se borra (hecho).
@@ -107,14 +107,38 @@ Que la rueda ofrezca **Comprimir en ZIP** al soltar una carpeta (o varios archiv
 
 Que la rueda no sirva solo para archivos: si seleccionás un texto o un párrafo en cualquier app, un atajo (o arrastrar la selección y tocar una tecla, como con los archivos) abre una rueda con acciones para ese texto.
 
-- **Formato**: MAYÚSCULAS, minúsculas, Tipo Título, quitar saltos de línea y espacios de más, texto plano sin formato.
-- **Usar**: buscar en la web, abrir si es un link, contar palabras y caracteres, copiar limpio, guardar como `.txt` en el escritorio.
+- **Formato**: MAYÚSCULAS, minúsculas, Tipo Título, sin tildes, quitar saltos de línea y espacios de más, unir líneas cortadas (texto copiado de un PDF), texto plano sin formato.
+- **Usar**: buscar en la web, abrir si es un link, contar palabras y caracteres, ordenar líneas, quitar líneas repetidas, generar un QR, copiar limpio, guardar como `.txt` o `.md` en el escritorio, hacer un PDF con el texto, abrir en el Bloc de notas, leer en voz alta (voces de Windows, sin internet).
 - **Mandarlo a otro lado**: Compartir, Flotar en el estante y fijarlo en el historial del portapapeles.
-- **Más adelante**: traducir, resumir o corregir (con IA, opcional y configurable).
+- **Según lo que se seleccionó** (como los archivos, que muestran opciones según su tipo):
+  - Un link: abrirlo o hacerle un QR.
+  - Un mail: escribirle.
+  - Una ruta: abrir esa carpeta.
+  - Una cuenta (`15*3+2`): mostrar el resultado.
+  - Un color (`#7CB342`): ver la muestra y pasarlo a RGB.
+  - Un JSON: ordenarlo con sangrías.
+  - Una fecha: agregarla al calendario con un `.ics`.
+- **Más adelante** (necesitan internet): traducir, convertir monedas, resumir o corregir (con IA, opcional y configurable).
+
+Por dónde empezar: arrastrar texto y las opciones sin internet. Es lo más útil y no depende de nadie.
+
+Estado:
+
+- [x] Arrastrar un texto seleccionado y tocar Shift, Ctrl o Alt abre la rueda de texto; la cápsula muestra el comienzo y cuántas palabras tiene.
+- [x] Convertir: MAYÚSCULAS, minúsculas, Tipo Título, Sin tildes, Unir líneas, Limpiar espacios, JSON ordenado y color RGB / HEX. El resultado queda copiado y el aviso muestra cómo quedó.
+- [x] Herramientas: Contar, Ordenar líneas, Quitar repetidas, Calcular, Código QR, Guardar .txt y Hacer PDF (los tres últimos, en el Escritorio).
+- [x] Acciones: Copiar, Abrir link, Escribir mail, Abrir carpeta, Buscar en la web, Bloc de notas y Leer en voz alta.
+- [ ] Atajo sin arrastre (simular Ctrl+C y restaurar el portapapeles).
+- [ ] Pegar el resultado en su lugar en vez de dejarlo copiado.
+- [ ] Fecha → calendario (`.ics`), Compartir, Flotar y fijar en el portapapeles.
+- [ ] Cortar la lectura en voz alta (hoy se corta pidiéndola de nuevo con otro texto).
+- [ ] Lo que necesita internet: traducir, monedas, IA.
 
 Cómo encaja:
 
-- Para leer la selección se simula Ctrl+C, se toma el texto del portapapeles y después se restaura lo que había, sin ensuciar el historial. Para arrastrar texto, la rueda tendría que aceptar también `CF_UNICODETEXT` en el drop, no solo archivos.
+- Para leer la selección se simula Ctrl+C, se toma el texto del portapapeles y después se restaura lo que había, sin ensuciar el historial. Para arrastrar texto, la rueda tendría que aceptar también `CF_UNICODETEXT` en el drop, no solo archivos. Hoy el arrastre de texto ya llega a la rueda, pero `WheelWindow.OnDragEnter` solo lee `FileDrop` y muestra "Nada para hacer con esto".
+- Con el atajo sin arrastre no hay que usar Shift ni Ctrl solos: se tocan todo el tiempo al escribir y la rueda saltaría sin querer. Hoy ese atajo toma la selección del Explorador (`ExplorerSelection`); si no hay archivos, puede probar con el texto seleccionado.
+- Casi todo sale con .NET sin instalar nada: el formato es manejo de texto, el QR con una librería chica (QRCoder), la voz con `Windows.Media.SpeechSynthesis`, el PDF con PDFsharp (que ya está), las cuentas con `DataTable.Compute` y el JSON con `System.Text.Json`.
 - Las acciones que cambian el texto lo pegan de vuelta en su lugar (Ctrl+V) o lo dejan copiado.
 - Operaciones nuevas en `src/Palta.Core/Operations/` que reciben texto en vez de rutas. La rueda y la estética no cambian.
 

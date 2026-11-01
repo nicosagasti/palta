@@ -81,12 +81,15 @@ internal static class Bench
                 ("acciones", WheelKind.Actions, [report], 1),
                 ("herramientas-varios", WheelKind.Tools, [photo, report, Path.Combine(samples, "Fotos del viaje")], -1),
                 ("herramientas-mezcla", WheelKind.Tools, [photo, report], 0),
+                ("texto-convertir", WheelKind.Convert, ["Esta es una línea cor-\ntada que vino de un PDF."], 4),
+                ("texto-herramientas", WheelKind.Tools, ["15*3+2"], 1),
+                ("texto-acciones", WheelKind.Actions, ["www.uns.edu.ar"], 1),
             };
             foreach (var c in cases)
             {
                 var (sx, sy, size) = wheel.ScreenRect(x, y);
                 var under = Wheel.GlassCapture.Capture(sx, sy, size, size, 1);
-                wheel.ShowPreview(c.Wheel, c.Files, x, y);
+                wheel.ShowPreview(c.Wheel, c.Files, x, y, isText: c.Name.StartsWith("texto"));
                 wheel.SnapshotHover(c.Hover);
                 await Task.Delay(450);
                 var path = Path.Combine(folder, c.Name + ".png");

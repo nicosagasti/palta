@@ -47,4 +47,9 @@ internal sealed class ShellHost(Dispatcher dispatcher, Action<IReadOnlyList<stri
             Process.Start(new ProcessStartInfo("powershell.exe", "-NoExit") { WorkingDirectory = folder, UseShellExecute = true });
         }
     }
+
+    public void Launch(string target, string? arguments = null) =>
+        Process.Start(new ProcessStartInfo(target) { Arguments = arguments ?? "", UseShellExecute = true })?.Dispose();
+
+    public void Speak(string text) => dispatcher.Invoke(() => Speech.Say(text));
 }

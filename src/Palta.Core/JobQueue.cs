@@ -10,9 +10,12 @@ public sealed class Job
     {
         Operation = operation;
         Files = files;
-        var first = Path.GetFileName(files[0]);
+        var first = operation.ForText ? Operations.TextOperations.Snippet(files[0]) : Path.GetFileName(files[0]);
         Title = files.Count > 1 ? $"{operation.Label} · {first} y {files.Count - 1} más" : $"{operation.Label} · {first}";
     }
+
+    /// <summary>Lo que la operación quiere mostrar en el aviso en vez del nombre del resultado.</summary>
+    public string? Note { get; internal set; }
 
     public Guid Id { get; } = Guid.NewGuid();
     public IOperation Operation { get; }
@@ -91,7 +94,7 @@ public sealed class JobQueue(int concurrency)
         try
         {
             job.Set(JobState.Running, 0);
-            var progress = new SyncProgress(job.ReportProgress);
+            var progress = new SyncProgress(job.ReportProgress, note => job.Note = note);
             var outputs = await job.Operation.RunAsync(job.Files, progress, job.Token);
             job.Set(JobState.Done, 1, outputs: outputs);
         }
@@ -122,8 +125,10 @@ public sealed class JobQueue(int concurrency)
     private static string FirstLine(string s) => s.Split('\n', 2)[0].Trim();
 
     /// <summary>Progress&lt;T&gt; publica en el SynchronizationContext; acá queremos el aviso inmediato.</summary>
-    private sealed class SyncProgress(Action<double> report) : IProgress<double>
+    private sealed class SyncProgress(Action<double> report, Action<string> note) : IProgress<double>, IJobNotes
     {
         public void Report(double value) => report(value);
+
+        public void Note(string text) => note(text);
     }
 }

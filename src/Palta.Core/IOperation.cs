@@ -25,6 +25,21 @@ public interface IOperation
     /// no hace falta aviso salvo que falle.
     /// </summary>
     bool Quiet => false;
+
+    /// <summary>Trabaja sobre un texto arrastrado, no sobre archivos: la lista trae un solo elemento, el texto.</summary>
+    bool ForText => false;
+}
+
+/// <summary>Lo que una operación le quiere decir al usuario en el aviso (el resultado de una cuenta, cómo quedó el texto).</summary>
+public interface IJobNotes
+{
+    void Note(string text);
+}
+
+public static class JobNote
+{
+    /// <summary>Si quien sigue el progreso es un trabajo de la cola, el aviso muestra <paramref name="text"/>.</summary>
+    public static void Set(IProgress<double> progress, string text) => (progress as IJobNotes)?.Note(text);
 }
 
 /// <summary>Lo que las acciones necesitan de la interfaz (selector de carpeta, portapapeles, compartir…).</summary>
@@ -43,6 +58,12 @@ public interface IShellHost
 
     /// <summary>Abre una terminal en esa carpeta.</summary>
     void OpenTerminal(string folder);
+
+    /// <summary>Abre un link, un mailto:, una carpeta o un programa, como si se hiciera doble clic.</summary>
+    void Launch(string target, string? arguments = null);
+
+    /// <summary>Lee el texto en voz alta con las voces de Windows (si se vuelve a pedir, corta lo anterior).</summary>
+    void Speak(string text);
 }
 
 public sealed class Operation(
@@ -58,6 +79,7 @@ public sealed class Operation(
     public string Label => label;
     public string Glyph => glyph;
     public bool Quiet { get; init; }
+    public bool ForText { get; init; }
 
     public bool AppliesTo(IReadOnlyList<string> files) => files.Count > 0 && appliesTo(files);
 

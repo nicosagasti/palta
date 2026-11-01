@@ -105,12 +105,7 @@ internal sealed class WindowsToasts
 
     private static string DoneXml(Job job)
     {
-        var body = job.Outputs.Count switch
-        {
-            0 => JobToast.FileLine(job),
-            1 => Path.GetFileName(job.Outputs[0]),
-            var n => $"{n} archivos · {Path.GetFileName(Path.GetDirectoryName(job.Outputs[0]))}",
-        };
+        var body = JobToast.DoneBody(job);
         // Si el resultado es una imagen, se ve chiquita a la izquierda, como en las notificaciones de fotos.
         var image = job.Outputs.FirstOrDefault(o => Formats.KindOf(o) == FileKind.Image && File.Exists(o)) is { } img
             ? $"""<image placement="appLogoOverride" src="{Esc(new Uri(img).AbsoluteUri)}"/>"""
@@ -132,7 +127,7 @@ internal sealed class WindowsToasts
 
     private static string FailedXml(Job job)
     {
-        var title = job.Operation.Wheel == WheelKind.Convert ? $"No se pudo convertir a {job.Operation.Label}" : $"No se pudo: {job.Operation.Label}";
+        var title = job.Operation.Wheel == WheelKind.Convert && !job.Operation.ForText ? $"No se pudo convertir a {job.Operation.Label}" : $"No se pudo: {job.Operation.Label}";
         return $"""
             <toast>
               <visual><binding template="ToastGeneric">

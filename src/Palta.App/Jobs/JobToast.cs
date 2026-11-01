@@ -192,14 +192,30 @@ internal sealed class JobToast : Window
 
     internal static string FileLine(Job job)
     {
+        if (job.Operation.ForText)
+            return Core.Operations.TextOperations.Snippet(job.Files[0]);
         var first = System.IO.Path.GetFileName(job.Files[0].TrimEnd('\\'));
         return job.Files.Count > 1 ? $"{first} y {job.Files.Count - 1} más" : first;
     }
 
-    internal static string Doing(IOperation op) => op.Wheel == WheelKind.Convert ? $"Convirtiendo a {op.Label}…" : $"{op.Label}…";
+    internal static string Doing(IOperation op) => op.Wheel == WheelKind.Convert && !op.ForText ? $"Convirtiendo a {op.Label}…" : $"{op.Label}…";
 
-    internal static string DoneTitle(IOperation op) => op.Wheel == WheelKind.Convert ? $"Convertido a {op.Label}" : op.Id switch
+    /// <summary>Con un resultado de texto (una cuenta, cómo quedó el texto), eso; si no, el archivo que salió.</summary>
+    internal static string DoneBody(Job job) => job.Note ?? job.Outputs.Count switch
     {
+        0 => FileLine(job),
+        1 => System.IO.Path.GetFileName(job.Outputs[0]),
+        var n => $"{n} archivos · {System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(job.Outputs[0]))}",
+    };
+
+    internal static string DoneTitle(IOperation op) => op.Wheel == WheelKind.Convert && !op.ForText ? $"Convertido a {op.Label}" : op.Id switch
+    {
+        "text-count" => "Conteo",
+        "text-calc" => "Resultado copiado",
+        "text-copy" => "Texto copiado",
+        "text-qr" => "Código QR en el Escritorio",
+        "text-save" or "text-pdf" => "Guardado en el Escritorio",
+        _ when op.ForText => $"{op.Label} · copiado",
         "copy-path" => "Ruta copiada",
         "copy-to" => "Copiado",
         "move-to" => "Movido",
@@ -227,12 +243,7 @@ internal sealed class JobToast : Window
             case JobState.Done:
                 _barTrack.Visibility = Visibility.Collapsed;
                 _title.Text = DoneTitle(job.Operation);
-                _body.Text = job.Outputs.Count switch
-                {
-                    0 => FileLine(job),
-                    1 => System.IO.Path.GetFileName(job.Outputs[0]),
-                    var n => $"{n} archivos · {System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(job.Outputs[0]))}",
-                };
+                _body.Text = DoneBody(job);
                 ShowAttachment(job);
                 if (job.Outputs.Count > 0)
                     SetActions(("Mostrar en carpeta", () => Reveal(job.Outputs[0])), ("Abrir", OpenResult));
@@ -243,7 +254,7 @@ internal sealed class JobToast : Window
                 break;
             case JobState.Failed:
                 _barTrack.Visibility = Visibility.Collapsed;
-                _title.Text = job.Operation.Wheel == WheelKind.Convert ? $"No se pudo convertir a {job.Operation.Label}" : $"No se pudo: {job.Operation.Label}";
+                _title.Text = job.Operation.Wheel == WheelKind.Convert && !job.Operation.ForText ? $"No se pudo convertir a {job.Operation.Label}" : $"No se pudo: {job.Operation.Label}";
                 _body.Text = job.Error ?? "Error desconocido";
                 _body.ToolTip = job.Error;
                 // Como las notificaciones de Windows, también se va sola, pero da más tiempo para leerlo.

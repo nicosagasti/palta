@@ -15,6 +15,10 @@ public sealed class FakeHost : IShellHost
     public void Share(IReadOnlyList<string> files) => Shared = files;
     public void Float(IReadOnlyList<string> files) => Floated = files;
     public void OpenTerminal(string folder) => TerminalAt = folder;
+    public List<string> Launched = [];
+    public string? Spoken;
+    public void Launch(string target, string? arguments = null) => Launched.Add(arguments is null ? target : $"{target} {arguments}");
+    public void Speak(string text) => Spoken = text;
 }
 
 public class TangerineActionsTests

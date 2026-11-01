@@ -46,6 +46,9 @@ internal sealed class WheelWindow : Window
     private BitmapSource? _backdrop;
     private WheelKind _wheel;
     private IReadOnlyList<string> _files = [];
+
+    /// <summary>Lo que se arrastra es un texto: <see cref="_files"/> trae un solo elemento, el texto.</summary>
+    private bool _isText;
     private List<IOperation> _ops = [];
     private readonly List<FrameworkElement> _sectors = [];
     private int? _hover;
@@ -124,7 +127,7 @@ internal sealed class WheelWindow : Window
         Left = -10000;
         Top = -10000;
         // Dibuja una rueda completa una vez para que el JIT y el layout ya estén calientes.
-        _files = [@"C:\muestra.png"];
+        (_files, _isText) = ([@"C:\muestra.png"], false);
         _ops = OpsFor(WheelKind.Convert);
         BuildStatic();
         Rebuild(animate: false);
@@ -133,7 +136,7 @@ internal sealed class WheelWindow : Window
         SetHover(0);
         Hide();
         Clear();
-        _files = [];
+        (_files, _isText) = ([], false);
         _ops = [];
     }
 
@@ -148,7 +151,7 @@ internal sealed class WheelWindow : Window
             return;
         }
         _keyboardMode = false;
-        _files = [];
+        (_files, _isText) = ([], false);
         Open(wheel, x, y);
         _emptyTimer.Start();
     }
@@ -157,7 +160,7 @@ internal sealed class WheelWindow : Window
     public void ShowForFiles(WheelKind wheel, IReadOnlyList<string> files, int x, int y)
     {
         _keyboardMode = true;
-        _files = files;
+        (_files, _isText) = (files, false);
         Open(wheel, x, y);
         Win32.RemoveExStyle(_hwnd, Win32.WS_EX_NOACTIVATE);
         Activate();
@@ -171,7 +174,7 @@ internal sealed class WheelWindow : Window
     {
         if (!IsVisible || _lastOperationId() is not { } id || _catalog.ById(id) is not { } op)
             return;
-        if (_files.Count > 0 && !op.AppliesTo(_files))
+        if (_files.Count > 0 && (op.ForText != _isText || !op.AppliesTo(_files)))
             return;
         _repeatMode = true;
         _ops = [op];
@@ -214,7 +217,8 @@ internal sealed class WheelWindow : Window
         AnimateOpen();
     }
 
-    private List<IOperation> OpsFor(WheelKind wheel) => _files.Count == 0 ? [] : [.. _catalog.For(wheel, _files)];
+    private List<IOperation> OpsFor(WheelKind wheel) =>
+        _files.Count == 0 ? [] : _isText ? [.. _catalog.ForText(wheel, _files[0])] : [.. _catalog.For(wheel, _files)];
 
     private void SwitchTo(WheelKind wheel)
     {
@@ -241,12 +245,16 @@ internal sealed class WheelWindow : Window
         Core.Log.Debug($"DragEnter formats={string.Join(",", e.Data.GetFormats())} allowed={e.AllowedEffects}");
         _closeTimer.Stop();
         var files = e.Data.GetDataPresent(DataFormats.FileDrop) ? e.Data.GetData(DataFormats.FileDrop) as string[] : null;
-        if (files is { Length: > 0 } && !files.SequenceEqual(_files))
+        var isText = false;
+        // Sin archivos, puede ser un texto seleccionado que arrastran desde cualquier app.
+        if (files is null && DraggedText(e.Data) is { } text)
+            (files, isText) = ([text], true);
+        if (files is { Length: > 0 } && (!files.SequenceEqual(_files) || isText != _isText))
         {
             _emptyTimer.Stop();
-            _files = files;
+            (_files, _isText) = (files, isText);
             _message = null;
-            _ops = _repeatMode ? _ops.Where(o => o.AppliesTo(files)).ToList() : OpsFor(_wheel);
+            _ops = _repeatMode ? _ops.Where(o => o.ForText == isText && o.AppliesTo(files)).ToList() : OpsFor(_wheel);
             Rebuild(animate: true);
         }
         else if (files is null)
@@ -255,6 +263,23 @@ internal sealed class WheelWindow : Window
             UpdateCaption();
         }
         OnDragOver(sender, e);
+    }
+
+    private static string? DraggedText(IDataObject data)
+    {
+        try
+        {
+            var text = data.GetDataPresent(DataFormats.UnicodeText) ? data.GetData(DataFormats.UnicodeText) as string
+                : data.GetDataPresent(DataFormats.Text) ? data.GetData(DataFormats.Text) as string
+                : null;
+            return string.IsNullOrWhiteSpace(text) ? null : text.TrimEnd('\0');
+        }
+        catch (Exception e) when (e is System.Runtime.InteropServices.COMException or OutOfMemoryException)
+        {
+            // Algunas apps anuncian texto y después no lo entregan.
+            Core.Log.Error("Leer el texto arrastrado", e);
+            return null;
+        }
     }
 
     private void OnDragOver(object sender, DragEventArgs e)
@@ -513,7 +538,8 @@ internal sealed class WheelWindow : Window
     {
         var dark = Dark;
         var text = new SolidColorBrush(Glass.Text(dark));
-        var isFormat = _wheel == WheelKind.Convert && !_repeatMode;
+        // Los formatos de archivo van como insignia ("JPG"); las conversiones de texto, con ícono y nombre.
+        var isFormat = _wheel == WheelKind.Convert && !_repeatMode && !op.ForText;
         var stack = new StackPanel { IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Center };
         TextBlock? label = null;
 
@@ -620,7 +646,7 @@ internal sealed class WheelWindow : Window
             if (_files.Count > 0)
             {
                 // Un archivo: su nombre. Varios: el resumen ("15 archivos · 12 imágenes, 3 PDF").
-                _caption.Inlines.Add(new System.Windows.Documents.Run("   " + Formats.Summary(_files)));
+                _caption.Inlines.Add(new System.Windows.Documents.Run("   " + (_isText ? Core.Operations.TextOperations.Summary(_files[0]) : Formats.Summary(_files))));
             }
         }
         _captionChip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
@@ -688,10 +714,10 @@ internal sealed class WheelWindow : Window
     }
 
     /// <summary>Para --snapshot: abre como en un arrastre, pero con archivos ya conocidos.</summary>
-    public void ShowPreview(WheelKind wheel, IReadOnlyList<string> files, int x, int y)
+    public void ShowPreview(WheelKind wheel, IReadOnlyList<string> files, int x, int y, bool isText = false)
     {
         _keyboardMode = false;
-        _files = files;
+        (_files, _isText) = (files, isText);
         Open(wheel, x, y);
     }
 
